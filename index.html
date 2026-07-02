@@ -11,7 +11,8 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.31/jspdf.plugin.autotable.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
-<script src="https://accounts.google.com/gsi/client" async defer></script>
+<!-- Supabase Library -->
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 
 <style>
   :root{
@@ -189,7 +190,7 @@
       </div>
 
       <div class="mt-10 pt-6 border-t" style="border-color:rgba(240,196,83,.15)">
-        <div class="text-[11px] tracking-widest uppercase mb-1" style="color:rgba(240,196,83,.4)">Version 3.1</div>
+        <div class="text-[11px] tracking-widest uppercase mb-1" style="color:rgba(240,196,83,.4)">Version 4.0</div>
         <div class="text-xs" style="color:rgba(232,224,200,.5)">© 2025 Expenses Management System · Finance &amp; Administration</div>
       </div>
     </div>
@@ -516,12 +517,6 @@
     <section id="sec-backup" class="section">
       <div class="grid grid-cols-1 lg:grid-cols-2 gap-5">
         <div class="card p-6 mb-5">
-          <h3 class="font-display font-bold text-lg mb-2">Google Drive Sync</h3>
-          <p class="text-xs mb-4" style="color:var(--muted)">Automatically sync your data to Google Drive in real-time.</p>
-          <div id="gdrive-connect-area"></div>
-          <div id="gdrive-sync-status" class="text-xs text-center mt-2" style="color:var(--muted)">Not connected to Google Drive.</div>
-        </div>
-        <div class="card p-6">
           <h3 class="font-display font-bold text-lg mb-2">Local Windows Backup</h3>
           <p class="text-xs mb-4" style="color:var(--muted)">Export, import, or connect to a local file on your Windows drive.</p>
           <div id="backup-connect-area">
@@ -534,8 +529,11 @@
           <hr class="my-4" style="border-color:var(--border)">
           <button class="btn btn-danger w-full justify-center" onclick="confirmClearData()"><i class="fa-solid fa-trash"></i> Clear All Data (Admin Only)</button>
         </div>
+        <div class="card p-6">
+          <h3 class="font-display font-bold text-lg mb-2">Storage Statistics</h3>
+          <div id="storage-stats" class="space-y-3"></div>
+        </div>
       </div>
-      <div class="card p-6 mt-5"><h3 class="font-display font-bold text-lg mb-2">Storage Statistics</h3><div id="storage-stats" class="space-y-3"></div></div>
     </section>
 
   </div>
@@ -546,10 +544,23 @@
 <div class="toast-container" id="toast-container"></div>
 
 <script>
-const GDRIVE_CLIENT_ID = 'YOUR_GOOGLE_CLIENT_ID_HERE'; 
+// =================================================================
+// SUPABASE CONFIGURATION
+// Replace these with your actual Supabase URL and Anon Key
+// =================================================================
+const SUPABASE_URL = 'YOUR_SUPABASE_URL'; 
+const SUPABASE_KEY = 'YOUR_SUPABASE_ANON_KEY';
+
+let supabaseClient = null;
+if (SUPABASE_URL !== 'YOUR_SUPABASE_URL' && SUPABASE_KEY !== 'YOUR_SUPABASE_ANON_KEY') {
+  try {
+    supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+  } catch(e) { console.error("Supabase init failed", e); }
+}
+// =================================================================
+
 const STORE_KEY = 'pcms_data_v3';
 const SESSION_KEY = 'pcms_session';
-const GOOGLE_SHEET_API_URL = ''; 
 const ADMIN_SECRET_KEY = "dasdasdsad4as6dfasfwafas1fsafsafas854f1sacxzc0521!!#$";
 
 const defaultData = {
@@ -560,12 +571,12 @@ const defaultData = {
   initialized: false
 };
 
-let State = loadData();
+let State = JSON.parse(JSON.stringify(defaultData));
+try { const raw = localStorage.getItem(STORE_KEY); if(raw) State = JSON.parse(raw); } catch(e){}
+
 let CurrentUser = null;
 let fileHandle = null; 
-let gdriveToken = null;
-let gdriveTokenClient = null;
-let gdriveFileId = localStorage.getItem('gdrive_file_id') || null;
+let saveTimeout = null;
 
 const fileDB = {
   db: null,
@@ -575,16 +586,50 @@ const fileDB = {
   delete(key) { return new Promise((resolve) => { if(!this.db) return resolve(); const tx = this.db.transaction('handles', 'readwrite'); tx.objectStore('handles').delete(key); tx.oncomplete = () => resolve(); tx.onerror = () => resolve(); }); }
 };
 
-function loadData(){
-  try { const raw = localStorage.getItem(STORE_KEY); if(raw) return JSON.parse(raw); } catch(e){ console.error(e); }
-  return JSON.parse(JSON.stringify(defaultData));
+async function loadData(){
+  if (!supabaseClient) {
+    // Fallback to local only if Supabase keys aren't configured
+    return;
+  }
+  try {
+    const { data, error } = await supabaseClient
+      .from('app_data')
+      .select('data')
+      .eq('id', 1)
+      .single();
+
+    if (error && error.code !== 'PGRST116') throw error; // PGRST116 = no rows found
+
+    if (data && data.data && Object.keys(data.data).length > 0) {
+      State = data.data;
+      localStorage.setItem(STORE_KEY, JSON.stringify(State));
+    }
+  } catch(e){ 
+    console.error('Supabase load failed, using local cache:', e); 
+    toast('Cloud sync failed. Loaded from local backup.', 'warning');
+  }
 }
 
 async function saveData(){
+  // 1. Save locally instantly (so UI is lightning fast)
   localStorage.setItem(STORE_KEY, JSON.stringify(State));
-  if(GOOGLE_SHEET_API_URL){ try { await fetch(GOOGLE_SHEET_API_URL, { method: 'POST', body: JSON.stringify(State), headers: { 'Content-Type': 'application/json' } }); } catch(e){ console.error('Save to sheet failed:', e); } }
-  if(fileHandle){ try { const writable = await fileHandle.createWritable(); await writable.write(JSON.stringify(State, null, 2)); await writable.close(); } catch(e){ console.error('Local file write failed:', e); } }
-  if (gdriveToken && gdriveFileId) { await syncToGDrive(); }
+  
+  // 2. Debounce save to Supabase
+  if (!supabaseClient) return;
+  
+  clearTimeout(saveTimeout);
+  saveTimeout = setTimeout(async () => {
+    try {
+      const { error } = await supabaseClient
+        .from('app_data')
+        .upsert({ id: 1, data: State, updated_at: new Date().toISOString() });
+        
+      if (error) throw error;
+    } catch(e) { 
+      console.error('Supabase save failed:', e); 
+      toast('Cloud sync failed. Data saved locally.', 'warning');
+    }
+  }, 500); // Waits 500ms after the last action before syncing to cloud
 }
 
 function seedDataIfEmpty(){
@@ -683,7 +728,6 @@ function showApp(){
   document.querySelectorAll('.admin-only').forEach(el => { if(isAdmin()) el.classList.remove('hidden'); else el.classList.add('hidden'); });
   renderDashboard();
   updateClock();
-  renderGdriveUI(); 
 }
 
 function openProfileModal(){ openModal(`<div class="modal-header"><h3 class="font-display font-bold text-lg">User Profile</h3><button onclick="closeModal()" class="text-xl" style="color:rgba(240,196,83,.7)"><i class="fa-solid fa-xmark"></i></button></div><div class="modal-body"><div class="flex items-center gap-4 mb-5"><div class="user-avatar" style="width:64px; height:64px; font-size:24px">${getUserInitials(CurrentUser.name)}</div><div><div class="font-display font-bold text-xl">${CurrentUser.name}</div><div class="text-sm" style="color:var(--muted)">@${CurrentUser.username}</div><span class="badge ${CurrentUser.role === 'Administrator' ? 'badge-amber' : 'badge-blue'} mt-1">${CurrentUser.role}</span></div></div><div class="space-y-3"><div class="flex justify-between p-3 rounded-lg" style="background:var(--surface2)"><span class="text-sm" style="color:var(--muted)">User ID</span><span class="font-mono font-semibold">${CurrentUser.id}</span></div><div class="flex justify-between p-3 rounded-lg" style="background:var(--surface2)"><span class="text-sm" style="color:var(--muted)">Mobile</span><span class="font-mono font-semibold">+91 ${CurrentUser.mobile}</span></div><div class="flex justify-between p-3 rounded-lg" style="background:var(--surface2)"><span class="text-sm" style="color:var(--muted)">Last Login</span><span class="text-sm">${fmtDateTime(CurrentUser.lastLogin)}</span></div></div></div><div class="modal-footer"><button class="btn btn-ghost" onclick="closeModal()">Close</button><button class="btn btn-danger" onclick="closeModal(); logout()"><i class="fa-solid fa-right-from-bracket"></i> Sign Out</button></div>`); }
@@ -921,14 +965,6 @@ function printDeleted(){ window.print(); }
 // AUDIT
 function renderAudit(){ let list = [...State.transactions]; const s = document.getElementById('audit-search').value.toLowerCase().trim(), f = document.getElementById('audit-from').value, t = document.getElementById('audit-to').value; if(s) list = list.filter(x => x.id.toLowerCase().includes(s) || (x.createdBy||'').toLowerCase().includes(s)); if(f) list = list.filter(x => x.date >= f); if(t) list = list.filter(x => x.date <= t); list.sort((a,b) => b.createdDate.localeCompare(a.createdDate)); document.getElementById('audit-tbody').innerHTML = list.length ? list.map(t => `<tr><td><span class="font-mono text-xs font-semibold">${t.id}</span></td><td>${t.type}</td><td class="font-mono font-semibold">${fmtMoney(t.amount)}</td><td class="text-xs">${t.createdBy || '—'}</td><td class="text-xs">${fmtDateTime(t.createdDate)}</td><td class="text-xs">${t.modifiedBy || '—'}</td><td class="text-xs">${fmtDateTime(t.modifiedDate)}</td><td>${t.modifiedBy ? '<span class="badge badge-amber">Modified</span>' : '<span class="badge badge-green">Original</span>'}</td></tr>`).join('') : '<tr><td colspan="8" class="empty-state"><div>No records</div></td></tr>'; }
 
-// GOOGLE DRIVE SYNC
-function renderGdriveUI() { const area = document.getElementById('gdrive-connect-area'); const statusEl = document.getElementById('gdrive-sync-status'); if (gdriveToken) { area.innerHTML = `<button class="btn btn-danger w-full justify-center" onclick="disconnectGDrive()"><i class="fa-solid fa-unlink"></i> Disconnect Google Drive</button>`; statusEl.innerHTML = `<span style="color:var(--success)"><i class="fa-solid fa-cloud-arrow-up"></i> Real-time sync active.</span>`; } else { area.innerHTML = `<button class="btn btn-primary w-full justify-center" onclick="connectGDrive()"><i class="fa-brands fa-google-drive"></i> Connect Google Drive</button>`; statusEl.innerHTML = `<span style="color:var(--muted)">Not connected to Google Drive.</span>`; } }
-function connectGDrive() { if (!GDRIVE_CLIENT_ID || GDRIVE_CLIENT_ID === 'YOUR_GOOGLE_CLIENT_ID_HERE') return toast('Google Client ID not configured.', 'error'); gdriveTokenClient = google.accounts.oauth2.initTokenClient({ client_id: GDRIVE_CLIENT_ID, scope: 'https://www.googleapis.com/auth/drive.file', callback: async (response) => { gdriveToken = response.access_token; renderGdriveUI(); await findOrCreateGDriveFile(); toast('Google Drive connected successfully!', 'success'); saveData(); } }); gdriveTokenClient.requestAccessToken(); }
-async function findOrCreateGDriveFile() { if (!gdriveToken) return; const q = encodeURIComponent("name='expenses_data_backup.json'"); const res = await fetch(`https://www.googleapis.com/drive/v3/files?q=${q}&fields=files(id,name)`, { headers: { 'Authorization': `Bearer ${gdriveToken}` } }); const data = await res.json(); if (data.files && data.files.length > 0) { gdriveFileId = data.files[0].id; localStorage.setItem('gdrive_file_id', gdriveFileId); } else { await createGDriveFile(); } }
-async function createGDriveFile() { const boundary = '-------314159265358979323846'; const delimiter = "\r\n" + boundary + "\r\n"; const close_delim = "\r\n" + boundary + "--\r\n"; const metadata = { name: 'expenses_data_backup.json', mimeType: 'application/json' }; const multipartRequestBody = delimiter + 'Content-Type: application/json\r\n\r\n' + JSON.stringify(metadata) + delimiter + 'Content-Type: application/json\r\n\r\n' + JSON.stringify(State, null, 2) + close_delim; const res = await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id', { method: 'POST', headers: { 'Authorization': `Bearer ${gdriveToken}`, 'Content-Type': 'multipart/related; boundary="' + boundary + '"' }, body: multipartRequestBody }); const data = await res.json(); gdriveFileId = data.id; localStorage.setItem('gdrive_file_id', gdriveFileId); }
-async function syncToGDrive() { if (!gdriveToken || !gdriveFileId) return; try { await fetch(`https://www.googleapis.com/upload/drive/v3/files/${gdriveFileId}?uploadType=media`, { method: 'PATCH', headers: { 'Authorization': `Bearer ${gdriveToken}`, 'Content-Type': 'application/json' }, body: JSON.stringify(State, null, 2) }); } catch(e) { console.error('Drive sync failed', e); } }
-function disconnectGDrive() { gdriveToken = null; gdriveFileId = null; localStorage.removeItem('gdrive_file_id'); renderGdriveUI(); toast('Google Drive disconnected.', 'info'); }
-
 // LOCAL WINDOWS BACKUP
 function renderBackupUI(status, fileName = '') { const area = document.getElementById('backup-connect-area'); const statusEl = document.getElementById('local-sync-status'); if (status === 'connected') { area.innerHTML = `<div class="flex gap-2"><button class="btn btn-ghost w-full justify-center" onclick="exportBackup()"><i class="fa-solid fa-download"></i> Download Copy</button><button class="btn btn-danger w-full justify-center" onclick="disconnectLocalBackup()"><i class="fa-solid fa-unlink"></i> Disconnect</button></div>`; statusEl.innerHTML = `<span style="color:var(--success)"><i class="fa-solid fa-circle-check"></i> Auto-syncing to: ${fileName}</span>`; } else if (status === 'pending') { area.innerHTML = `<button class="btn btn-primary w-full justify-center" onclick="resumeLocalBackup()"><i class="fa-solid fa-plug-circle-check"></i> Resume Local Backup Sync</button>`; statusEl.innerHTML = `<span style="color:var(--warning)"><i class="fa-solid fa-circle-exclamation"></i> Permission required to resume auto-sync.</span>`; } else { area.innerHTML = `<button class="btn btn-primary w-full justify-center" onclick="connectLocalBackup()"><i class="fa-solid fa-plug"></i> Connect Local Backup File (Windows)</button>`; statusEl.innerHTML = `<span style="color:var(--muted)">Not connected to a local file.</span>`; } }
 async function connectLocalBackup() { if(!window.showSaveFilePicker) return toast('Your browser does not support direct file writing. Use Download instead.', 'warning'); try { fileHandle = await window.showSaveFilePicker({ suggestedName: 'expenses_data_backup.json', types: [{ description: 'JSON', accept: { 'application/json': ['.json'] } }] }); await fileDB.init(); await fileDB.set('localBackupHandle', fileHandle); renderBackupUI('connected', fileHandle.name); toast('Local backup connected. Auto-saving enabled.', 'success'); saveData(); } catch(e) { console.error(e); } }
@@ -947,7 +983,27 @@ function renderBackupStats(){ const s = new Blob([JSON.stringify(State)]).size; 
 
 // INIT
 function updateClock(){ const n = new Date(); document.getElementById('today-date').textContent = n.toLocaleDateString('en-IN', {weekday:'short', day:'2-digit', month:'short', year:'numeric'}); document.getElementById('today-time').textContent = n.toLocaleTimeString('en-IN', {hour:'2-digit', minute:'2-digit', second:'2-digit'}); }
-async function init(){ seedDataIfEmpty(); await checkLocalBackupOnStart(); const sId = sessionStorage.getItem(SESSION_KEY); if(sId){ const u = State.users.find(x => x.id === sId); if(u){ CurrentUser = u; u.lastLogin = new Date().toISOString(); saveData(); showApp(); setInterval(updateClock, 1000); return; } } document.getElementById('login-screen').classList.remove('hidden'); document.getElementById('app').style.display = 'none'; }
+async function init(){ 
+  await loadData(); // Fetch latest data from Supabase first
+  seedDataIfEmpty(); 
+  await checkLocalBackupOnStart(); 
+  
+  const sId = sessionStorage.getItem(SESSION_KEY); 
+  if(sId){ 
+    const u = State.users.find(x => x.id === sId); 
+    if(u){ 
+      CurrentUser = u; 
+      u.lastLogin = new Date().toISOString(); 
+      saveData(); 
+      showApp(); 
+      setInterval(updateClock, 1000); 
+      return; 
+    } 
+  } 
+  
+  document.getElementById('login-screen').classList.remove('hidden');
+  document.getElementById('app').style.display = 'none'; 
+}
 window.addEventListener('DOMContentLoaded', init);
 
 window.togglePassword = togglePassword; window.handleSignIn = handleSignIn; window.logout = logout; window.performLogout = performLogout; window.openProfileModal = openProfileModal;
@@ -959,7 +1015,6 @@ window.renderVendors = renderVendors; window.deleteVendor = deleteVendor; window
 window.renderApprovals = renderApprovals; window.approveDeletion = approveDeletion; window.rejectDeletion = rejectDeletion;
 window.switchReport = switchReport; window.setReportPreset = setReportPreset; window.generateReport = generateReport; window.exportReport = exportReport; window.printReport = printReport; window.exportTransactions = exportTransactions;
 window.renderDeleted = renderDeleted; window.goDelPage = goDelPage; window.viewDeletedTransaction = viewDeletedTransaction; window.exportDeleted = exportDeleted; window.printDeleted = printDeleted; window.renderAudit = renderAudit;
-window.connectGDrive = connectGDrive; window.disconnectGDrive = disconnectGDrive;
 window.connectLocalBackup = connectLocalBackup; window.resumeLocalBackup = resumeLocalBackup; window.disconnectLocalBackup = disconnectLocalBackup; window.exportBackup = exportBackup; window.importBackup = importBackup; window.confirmClearData = confirmClearData; window.verifyAndClearData = verifyAndClearData; window.clearAllData = clearAllData; window.closeModal = closeModal; window.toast = toast;
 </script>
 </body>
