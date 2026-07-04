@@ -523,11 +523,11 @@
 // SUPABASE CONFIGURATION
 // Replace these with your actual Supabase URL and Anon Key
 // =================================================================
-const SUPABASE_URL = 'https://pptgumfdutxxsrrdtujo.supabase.co'; 
-const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBwdGd1bWZkdXR4eHNycmR0dWpvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODI5MzgxNzUsImV4cCI6MjA5ODUxNDE3NX0.8fR_q6uIw8eQum_T0pKPJ36qDP6JtYmmy3BcwaVPljM';
+const SUPABASE_URL = 'YOUR_SUPABASE_URL'; 
+const SUPABASE_KEY = 'YOUR_SUPABASE_ANON_KEY';
 
 let supabaseClient = null;
-if (SUPABASE_URL !== 'https://pptgumfdutxxsrrdtujo.supabase.co' && SUPABASE_KEY !== 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBwdGd1bWZkdXR4eHNycmR0dWpvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODI5MzgxNzUsImV4cCI6MjA5ODUxNDE3NX0.8fR_q6uIw8eQum_T0pKPJ36qDP6JtYmmy3BcwaVPljM') {
+if (SUPABASE_URL !== 'YOUR_SUPABASE_URL' && SUPABASE_KEY !== 'YOUR_SUPABASE_ANON_KEY') {
   try {
     supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
   } catch(e) { console.error("Supabase init failed", e); }
@@ -724,7 +724,7 @@ function toggleTds(){ const c = document.getElementById('exp-tds-applicable').ch
 function resetExpenseForm(){ document.getElementById('expense-form').reset(); initExpenseForm(); }
 function submitExpense(e){ e.preventDefault(); const vId = document.getElementById('exp-vendor-id').value; if(!vId) return toast('Please select a vendor', 'error'), false; const amt = (() => { let s = 0; document.querySelectorAll('#items-tbody tr').forEach(tr => s += (parseFloat(tr.querySelector('.item-qty').value) || 0) * (parseFloat(tr.querySelector('.item-rate').value) || 0)); let tds = 0; if(document.getElementById('exp-tds-applicable').checked) tds = (s * (parseFloat(document.getElementById('exp-tds-rate').value) || 0)) / 100; return s - tds; })(); if(amt <= 0) return toast('Please add at least one item with valid amount', 'error'), false; const fileInput = document.getElementById('exp-attachment'); if(fileInput.files && fileInput.files[0]){ const f = fileInput.files[0]; if(f.size > 2*1024*1024) return toast('Attachment too large (max 2MB)', 'warning'), false; const r = new FileReader(); r.onload = e => finalizeExpense(amt, e.target.result); r.readAsDataURL(f); return false; } finalizeExpense(amt, null); return false; }
 function finalizeExpense(amt, att){ const date = document.getElementById('exp-date').value, ym = date.substr(0,7).replace('-',''); State.expenseSeq[ym] = (State.expenseSeq[ym] || 0) + 1; const id = `PC-${ym}-${String(State.expenseSeq[ym]).padStart(4,'0')}`; const items = []; document.querySelectorAll('#items-tbody tr').forEach((tr, i) => { const n = tr.querySelector('td:nth-child(2) input').value, q = parseFloat(tr.querySelector('.item-qty').value) || 0, r = parseFloat(tr.querySelector('.item-rate').value) || 0; if(n || q > 0) items.push({sr:i+1, name:n||'Item '+(i+1), qty:q, rate:r, total:q*r}); }); const sub = items.reduce((s,it)=>s+it.total, 0), tdsApp = document.getElementById('exp-tds-applicable').checked, tdsR = tdsApp ? (parseFloat(document.getElementById('exp-tds-rate').value) || 0) : 0, tdsA = tdsApp ? (sub * tdsR / 100) : 0; 
-  // Background balance calculation (not enforced, just for ledger)
+  // Background balance calculation (negative balance allowed)
   const o = getCurrentBalance(); const c = o - amt;
   State.transactions.push({ id, type:'Cash Out', date, vendorId: document.getElementById('exp-vendor-id').value, receivedFrom: null, masterHeadId: document.getElementById('exp-head').value, subHeadId: document.getElementById('exp-subhead').value, description: document.getElementById('exp-desc').value, amount:amt, openingBalance:o, closingBalance:c, billNumber: document.getElementById('exp-bill').value, paymentMode: document.getElementById('exp-mode').value, items, tdsApplicable:tdsApp, tdsRate:tdsR, tdsAmount:tdsA, subtotal:sub, remarks: document.getElementById('exp-remarks').value, attachment:att, createdBy: CurrentUser.name, createdDate: new Date().toISOString(), modifiedBy: null, modifiedDate: null, utr: null }); saveData(); toast('Expense saved: ' + id, 'success'); resetExpenseForm(); renderDashboard(); }
 
@@ -905,6 +905,26 @@ async function init(){
       saveData(); 
       showApp(); 
       setInterval(updateClock, 1000); 
+      
+      // --- REALTIME LISTENER ---
+      if (supabaseClient) {
+        supabaseClient.channel('app_data_changes')
+          .on('postgres_changes', { event: '*', schema: 'public', table: 'app_data' }, payload => {
+            // When data changes in Supabase, update the local state
+            if (payload.new && payload.new.data) {
+              State = payload.new.data;
+              localStorage.setItem(STORE_KEY, JSON.stringify(State));
+              
+              // Re-render the current page to show the new data instantly
+              const activeSection = document.querySelector('.section.active')?.id.replace('sec-', '');
+              if (activeSection) navTo(activeSection);
+              renderDashboard(); // Update sidebar balance
+            }
+          })
+          .subscribe();
+      }
+      // ------------------------
+      
       return; 
     } 
   } 
