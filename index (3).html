@@ -1,0 +1,949 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Expenses Management — School & Office Accounting</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<link href="https://fonts.googleapis.com/css2?family=Sora:wght@400;500;600;700;800&family=Plus+Jakarta+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.31/jspdf.plugin.autotable.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<!-- Supabase Library -->
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+
+<style>
+  :root{
+    --bg:#f3eee0; --bg2:#e8e0c8; --surface:#ffffff; --surface2:#fbf8ee;
+    --primary:#0e2b22; --primary2:#1a4d3e; --primary3:#2d6852;
+    --accent:#c9971a; --accent2:#f0c453; --accent3:#fef3d0;
+    --text:#1a2e25; --muted:#6b7872; --border:#ddd5bd; --border2:#c5bb98;
+    --success:#1f6e54; --danger:#a83b2c; --warning:#c9971a; --info:#356a85;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;padding:0}
+  body{font-family:'Plus Jakarta Sans',sans-serif; background:var(--bg); color:var(--text); min-height:100vh;}
+  .font-display{font-family:'Sora',sans-serif;letter-spacing:-0.01em}
+  .font-mono{font-family:'JetBrains Mono',monospace}
+
+  .login-screen{position:fixed; inset:0; z-index:9999; display:flex; background:var(--bg);}
+  .login-screen.hidden{display:none}
+  .login-left{flex:1; background:linear-gradient(135deg,#0e2b22 0%,#163b2f 40%,#1a4d3e 100%); position:relative; overflow:hidden; display:flex; flex-direction:column; justify-content:center; padding:60px; color:#f0c453;}
+  .login-left::before{content:''; position:absolute; inset:0; background:radial-gradient(circle at 20% 30%, rgba(201,151,26,.15), transparent 50%), radial-gradient(circle at 80% 70%, rgba(240,196,83,.08), transparent 45%);}
+  .login-left::after{content:''; position:absolute; inset:0; background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='60' height='60'><path d='M0 30h60M30 0v60' stroke='%23f0c453' stroke-opacity='0.03' stroke-width='1'/></svg>");}
+  .login-left-content{position:relative; z-index:2; max-width:480px}
+  .login-right{flex:1; display:flex; align-items:center; justify-content:center; padding:40px; position:relative;}
+  .login-form-wrap{width:100%; max-width:420px; position:relative; z-index:2}
+  .floating-coin{position:absolute; border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:20px; color:rgba(240,196,83,.15); border:1px solid rgba(240,196,83,.1); animation:float 6s ease-in-out infinite;}
+  @keyframes float{0%,100%{transform:translateY(0) rotate(0deg)} 50%{transform:translateY(-20px) rotate(10deg)}}
+  @keyframes slideUp{from{opacity:0;transform:translateY(20px)}to{opacity:1;transform:translateY(0)}}
+  .login-form-wrap{animation:slideUp .5s ease}
+
+  .sidebar{background:linear-gradient(180deg,#0e2b22 0%,#163b2f 100%); color:#e8e0c8; position:fixed; top:0; left:0; bottom:0; width:264px; z-index:40; display:flex; flex-direction:column; box-shadow:2px 0 20px rgba(14,43,34,.15); border-right:1px solid rgba(201,151,26,.2);}
+  .sidebar::before{content:''; position:absolute; inset:0; pointer-events:none; background:radial-gradient(circle at 20% 0%, rgba(201,151,26,.1), transparent 50%);}
+  .nav-item{display:flex; align-items:center; gap:12px; padding:11px 14px; margin:2px 12px; border-radius:8px; color:#cfc6ab; font-size:14px; font-weight:500; cursor:pointer; transition:all .18s ease; position:relative;}
+  .nav-item:hover{background:rgba(201,151,26,.08); color:#f0c453}
+  .nav-item.active{background:linear-gradient(90deg, rgba(201,151,26,.18), rgba(201,151,26,.04)); color:#f0c453; box-shadow:inset 2px 0 0 #f0c453;}
+  .nav-item i{width:18px; text-align:center; font-size:14px}
+  .nav-section-label{font-size:10px; letter-spacing:.15em; text-transform:uppercase; color:rgba(240,196,83,.5); padding:14px 26px 6px; font-weight:600;}
+  .main{margin-left:264px; min-height:100vh}
+  .topbar{background:rgba(255,255,255,.7); backdrop-filter:blur(12px); border-bottom:1px solid var(--border); padding:14px 28px; position:sticky; top:0; z-index:30; display:flex; align-items:center; gap:20px;}
+  .content{padding:28px; max-width:1500px; margin:0 auto}
+  .card{background:var(--surface); border:1px solid var(--border); border-radius:14px; box-shadow:0 1px 2px rgba(14,43,34,.04), 0 8px 24px -12px rgba(14,43,34,.08);}
+  .stat-card{background:var(--surface); border:1px solid var(--border); border-radius:14px; padding:20px; position:relative; overflow:hidden; transition:transform .25s ease, box-shadow .25s ease;}
+  .stat-card:hover{transform:translateY(-2px); box-shadow:0 12px 32px -12px rgba(14,43,34,.18)}
+  .stat-card::before{content:''; position:absolute; top:0; left:0; bottom:0; width:4px; background:var(--accent)}
+  .stat-card.green::before{background:var(--success)}
+  .stat-card.red::before{background:var(--danger)}
+  .stat-card.blue::before{background:var(--info)}
+  .stat-card.purple::before{background:#7c4a8d}
+  .field-label{font-size:11px; font-weight:600; letter-spacing:.08em; text-transform:uppercase; color:var(--muted); margin-bottom:6px; display:block}
+  .input, .select, .textarea{width:100%; padding:10px 12px; border:1px solid var(--border2); border-radius:8px; background:var(--surface2); font-family:inherit; font-size:14px; color:var(--text); transition:all .15s ease; outline:none;}
+  .input:focus, .select:focus, .textarea:focus{border-color:var(--primary3); background:#fff; box-shadow:0 0 0 3px rgba(45,104,82,.12);}
+  .input:disabled, .input.readonly{background:#f3eee0; color:var(--muted); cursor:not-allowed}
+  .input.error{border-color:var(--danger); background:#fdf5f3}
+  .btn{padding:10px 18px; border-radius:8px; font-weight:600; font-size:14px; cursor:pointer; transition:all .15s ease; display:inline-flex; align-items:center; gap:8px; border:1px solid transparent; white-space:nowrap;}
+  .btn-primary{background:var(--primary); color:#f0c453}
+  .btn-primary:hover{background:var(--primary2); transform:translateY(-1px); box-shadow:0 6px 18px -6px rgba(14,43,34,.4)}
+  .btn-accent{background:var(--accent); color:#1a2e25}
+  .btn-accent:hover{background:var(--accent2); transform:translateY(-1px)}
+  .btn-ghost{background:transparent; color:var(--text); border-color:var(--border2)}
+  .btn-ghost:hover{background:var(--surface2); border-color:var(--primary3)}
+  .btn-danger{background:var(--danger); color:#fff}
+  .btn-danger:hover{background:#8c3325; transform:translateY(-1px)}
+  .btn-sm{padding:6px 12px; font-size:12px}
+  .btn-icon{padding:8px 10px}
+  .badge{display:inline-flex; align-items:center; gap:5px; padding:3px 9px; border-radius:6px; font-size:11px; font-weight:600; letter-spacing:.03em}
+  .badge-green{background:#d8efe5; color:#1f6e54}
+  .badge-red{background:#f5ddd7; color:#a83b2c}
+  .badge-amber{background:#fcefc8; color:#8c6810}
+  .badge-blue{background:#d6e7f0; color:#356a85}
+  .badge-gray{background:#e8e3d4; color:#6b7872}
+  .badge-purple{background:#ece0f0; color:#7c4a8d}
+  .data-table{width:100%; border-collapse:collapse; font-size:13px}
+  .data-table thead th{background:var(--primary); color:#f0c453; text-align:left; padding:11px 14px; font-weight:600; font-size:11px; letter-spacing:.06em; text-transform:uppercase; border-bottom:2px solid var(--accent); white-space:nowrap; position:sticky; top:0;}
+  .data-table tbody td{padding:11px 14px; border-bottom:1px solid var(--border); vertical-align:middle}
+  .data-table tbody tr{transition:background .12s ease}
+  .data-table tbody tr:hover{background:var(--surface2)}
+  .data-table tbody tr:nth-child(even){background:rgba(243,238,224,.4)}
+  .data-table tbody tr:nth-child(even):hover{background:var(--surface2)}
+  .search-select{position:relative}
+  .search-select-dropdown{position:absolute; top:100%; left:0; right:0; background:#fff; border:1px solid var(--border2); border-radius:8px; max-height:280px; overflow-y:auto; z-index:50; box-shadow:0 12px 28px -8px rgba(14,43,34,.18); display:none; margin-top:4px;}
+  .search-select-dropdown.open{display:block}
+  .search-select-option{padding:10px 14px; cursor:pointer; border-bottom:1px solid var(--border); font-size:13px}
+  .search-select-option:hover{background:var(--accent3)}
+  .search-select-add{padding:11px 14px; background:var(--primary); color:var(--accent2); cursor:pointer; font-weight:600; font-size:13px; display:flex; align-items:center; gap:8px; border-radius:0 0 8px 8px;}
+  .search-select-add:hover{background:var(--primary2)}
+  .modal-backdrop{position:fixed; inset:0; background:rgba(14,43,34,.55); backdrop-filter:blur(4px); z-index:200; display:flex; align-items:center; justify-content:center; padding:20px; opacity:0; pointer-events:none; transition:opacity .2s ease;}
+  .modal-backdrop.open{opacity:1; pointer-events:auto}
+  .modal{background:#fff; border-radius:14px; max-width:560px; width:100%; max-height:90vh; overflow-y:auto; box-shadow:0 24px 60px -12px rgba(0,0,0,.4); transform:translateY(20px) scale(.98); transition:transform .2s ease; border:1px solid var(--border);}
+  .modal-backdrop.open .modal{transform:translateY(0) scale(1)}
+  .modal-header{padding:18px 22px; border-bottom:1px solid var(--border); display:flex; justify-content:space-between; align-items:center; background:linear-gradient(90deg, var(--primary), var(--primary2)); color:#f0c453; border-radius:14px 14px 0 0;}
+  .modal-body{padding:22px}
+  .modal-footer{padding:16px 22px; border-top:1px solid var(--border); display:flex; justify-content:flex-end; gap:10px; background:var(--surface2); border-radius:0 0 14px 14px}
+  .toast-container{position:fixed; top:20px; right:20px; z-index:300; display:flex; flex-direction:column; gap:10px; pointer-events:none}
+  .toast{background:#fff; border:1px solid var(--border); border-left:4px solid var(--accent); padding:12px 18px; border-radius:8px; box-shadow:0 12px 28px -8px rgba(0,0,0,.2); font-size:14px; font-weight:500; min-width:280px; max-width:380px; transform:translateX(400px); opacity:0; transition:all .3s ease; display:flex; align-items:center; gap:10px; pointer-events:auto;}
+  .toast.show{transform:translateX(0); opacity:1}
+  .toast.success{border-left-color:var(--success)}
+  .toast.error{border-left-color:var(--danger)}
+  .toast.warning{border-left-color:var(--warning)}
+  .toast.info{border-left-color:var(--info)}
+  ::-webkit-scrollbar{width:10px; height:10px}
+  ::-webkit-scrollbar-track{background:transparent}
+  ::-webkit-scrollbar-thumb{background:var(--border2); border-radius:6px; border:2px solid var(--bg)}
+  ::-webkit-scrollbar-thumb:hover{background:var(--primary3)}
+  .section{display:none; animation:fadeUp .35s ease}
+  .section.active{display:block}
+  @keyframes fadeUp{from{opacity:0; transform:translateY(8px)} to{opacity:1; transform:translateY(0)}}
+  .items-table input{padding:6px 8px; font-size:13px; border:1px solid var(--border2); border-radius:6px; background:var(--surface2); width:100%}
+  .items-table input:focus{outline:none; border-color:var(--primary3); background:#fff; box-shadow:0 0 0 2px rgba(45,104,82,.1)}
+  .tab-btn{padding:10px 18px; font-size:13px; font-weight:600; color:var(--muted); border-bottom:2px solid transparent; cursor:pointer; transition:all .15s ease;}
+  .tab-btn:hover{color:var(--text)}
+  .tab-btn.active{color:var(--primary); border-bottom-color:var(--accent)}
+  .mobile-toggle{display:none}
+  @media(max-width:900px){
+    .sidebar{transform:translateX(-100%); transition:transform .25s ease}
+    .sidebar.open{transform:translateX(0)}
+    .main{margin-left:0}
+    .mobile-toggle{display:flex}
+    .content{padding:18px}
+    .login-left{display:none}
+  }
+  @media print{.sidebar, .topbar, .no-print, .login-screen{display:none !important} .main{margin-left:0} .card{box-shadow:none; border:1px solid #ccc}}
+  .pulse-dot{width:8px; height:8px; border-radius:50%; background:var(--success); position:relative}
+  .pulse-dot::after{content:''; position:absolute; inset:-3px; border-radius:50%; border:2px solid var(--success); animation:pulse 1.8s ease-out infinite; opacity:0}
+  @keyframes pulse{0%{transform:scale(.9); opacity:.8} 100%{transform:scale(1.8); opacity:0}}
+  .checkbox-wrap{display:inline-flex; align-items:center; gap:8px; cursor:pointer; user-select:none}
+  .checkbox-wrap input[type=checkbox]{appearance:none; width:18px; height:18px; border:2px solid var(--border2); border-radius:4px; background:#fff; cursor:pointer; position:relative; transition:all .15s ease;}
+  .checkbox-wrap input[type=checkbox]:checked{background:var(--primary); border-color:var(--primary)}
+  .checkbox-wrap input[type=checkbox]:checked::after{content:'✓'; position:absolute; color:var(--accent2); font-size:12px; font-weight:bold; top:50%; left:50%; transform:translate(-50%,-50%);}
+  .empty-state{text-align:center; padding:48px 20px; color:var(--muted)}
+  .empty-state i{font-size:42px; margin-bottom:14px; opacity:.4}
+  .balance-display{font-family:'JetBrains Mono',monospace; font-weight:700; letter-spacing:-.02em}
+  .login-input-group{position:relative}
+  .login-input-group .input{padding-left:42px}
+  .login-input-group i{position:absolute; left:14px; top:50%; transform:translateY(-50%); color:var(--muted); font-size:14px}
+  .field-error{color:var(--danger); font-size:11px; margin-top:4px; display:none}
+  .field-error.show{display:block}
+  .password-toggle{position:absolute; right:14px; top:50%; transform:translateY(-50%); cursor:pointer; color:var(--muted); font-size:14px}
+  .user-avatar{width:36px; height:36px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-weight:700; font-size:14px; cursor:pointer; background:linear-gradient(135deg, var(--accent), var(--accent2)); color:var(--primary);}
+  .nav-item.hidden { display: none !important; }
+</style>
+</head>
+<body>
+
+<!-- ============ LOGIN SCREEN ============ -->
+<div class="login-screen" id="login-screen">
+  <div class="login-left">
+    <div class="floating-coin" style="top:12%; left:15%; width:50px; height:50px; animation-delay:0s"><i class="fa-solid fa-coins"></i></div>
+    <div class="floating-coin" style="top:25%; right:12%; width:70px; height:70px; font-size:28px; animation-delay:1.5s"><i class="fa-solid fa-money-bill-wave"></i></div>
+    <div class="floating-coin" style="bottom:20%; left:10%; width:60px; height:60px; font-size:24px; animation-delay:3s"><i class="fa-solid fa-receipt"></i></div>
+    <div class="floating-coin" style="bottom:30%; right:18%; width:45px; height:45px; font-size:18px; animation-delay:2s"><i class="fa-solid fa-hand-holding-dollar"></i></div>
+    <div class="floating-coin" style="top:50%; left:8%; width:40px; height:40px; font-size:16px; animation-delay:4s"><i class="fa-solid fa-chart-line"></i></div>
+
+    <div class="login-left-content">
+      <div class="flex items-center gap-3 mb-8">
+        <div class="w-12 h-12 rounded-xl flex items-center justify-center" style="background:linear-gradient(135deg,#c9971a,#f0c453)">
+          <i class="fa-solid fa-coins" style="color:#0e2b22; font-size:22px"></i>
+        </div>
+        <div>
+          <div class="font-display font-bold text-2xl" style="color:#f0c453">Expenses</div>
+          <div class="text-[11px] tracking-[0.2em] uppercase" style="color:rgba(240,196,83,.6)">Management System</div>
+        </div>
+      </div>
+
+      <h1 class="font-display font-bold text-5xl leading-[1.05] mb-4" style="color:#f0c453">
+        Manage Expenses<br>
+        <span style="background:linear-gradient(135deg,#c9971a 0%,#f0c453 50%,#fef3d0 100%); -webkit-background-clip:text; background-clip:text; -webkit-text-fill-color:transparent; font-weight:800">with precision.</span>
+      </h1>
+      <p class="text-base leading-relaxed mb-8" style="color:rgba(232,224,200,.7)">
+        A complete accounting system for schools and offices — automated balances, vendor management, audit trails, and professional reports.
+      </p>
+
+      <div class="space-y-3">
+        <div class="flex items-center gap-3 text-sm" style="color:rgba(232,224,200,.8)"><div class="w-8 h-8 rounded-lg flex items-center justify-center" style="background:rgba(201,151,26,.15)"><i class="fa-solid fa-shield-halved" style="color:#f0c453"></i></div><span>Secure user accounts with audit tracking</span></div>
+        <div class="flex items-center gap-3 text-sm" style="color:rgba(232,224,200,.8)"><div class="w-8 h-8 rounded-lg flex items-center justify-center" style="background:rgba(201,151,26,.15)"><i class="fa-solid fa-calculator" style="color:#f0c453"></i></div><span>Auto-calculated opening &amp; closing balances</span></div>
+        <div class="flex items-center gap-3 text-sm" style="color:rgba(232,224,200,.8)"><div class="w-8 h-8 rounded-lg flex items-center justify-center" style="background:rgba(201,151,26,.15)"><i class="fa-solid fa-file-export" style="color:#f0c453"></i></div><span>Export to Excel, PDF &amp; print-ready reports</span></div>
+        <div class="flex items-center gap-3 text-sm" style="color:rgba(232,224,200,.8)"><div class="w-8 h-8 rounded-lg flex items-center justify-center" style="background:rgba(201,151,26,.15)"><i class="fa-solid fa-trash-can-clock" style="color:#f0c453"></i></div><span>Admin approval workflow for deletions</span></div>
+      </div>
+
+      <div class="mt-10 pt-6 border-t" style="border-color:rgba(240,196,83,.15)">
+        <div class="text-[11px] tracking-widest uppercase mb-1" style="color:rgba(240,196,83,.4)">Version 4.0</div>
+        <div class="text-xs" style="color:rgba(232,224,200,.5)">© 2025 Expenses Management System · Finance &amp; Administration</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="login-right">
+    <div class="login-form-wrap">
+      <h2 class="font-display font-bold text-2xl mb-1">Welcome back</h2>
+      <p class="text-sm mb-6" style="color:var(--muted)">Sign in to access your expense register</p>
+      <form id="signin-form" onsubmit="return handleSignIn(event)">
+        <div class="space-y-4">
+          <div>
+            <label class="field-label">Username or Mobile Number</label>
+            <div class="login-input-group"><i class="fa-solid fa-user"></i><input type="text" class="input" id="signin-username" placeholder="Enter username or mobile" autocomplete="off"></div>
+            <div class="field-error" id="signin-username-error"></div>
+          </div>
+          <div>
+            <label class="field-label">Password</label>
+            <div class="login-input-group"><i class="fa-solid fa-lock"></i><input type="password" class="input" id="signin-password" placeholder="Enter password" style="padding-left:42px; padding-right:42px"><i class="fa-solid fa-eye password-toggle" id="signin-pw-toggle" onclick="togglePassword('signin-password','signin-pw-toggle')"></i></div>
+            <div class="field-error" id="signin-password-error"></div>
+          </div>
+          <div class="flex items-center justify-between text-xs">
+            <label class="checkbox-wrap"><input type="checkbox" id="remember-me" checked><span>Remember me</span></label>
+            <a href="#" class="font-semibold" style="color:var(--primary3)" onclick="toast('Contact your administrator to reset password','info'); return false;">Forgot password?</a>
+          </div>
+          <button type="submit" class="btn btn-primary w-full justify-center" style="padding:12px"><i class="fa-solid fa-right-to-bracket"></i> Sign In</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<!-- ============ APP ============ -->
+<div id="app" style="display:none">
+
+<aside class="sidebar" id="sidebar">
+  <div class="px-6 pt-6 pb-4 relative">
+    <div class="flex items-center gap-3">
+      <div class="w-10 h-10 rounded-lg flex items-center justify-center" style="background:linear-gradient(135deg,#c9971a,#f0c453)"><i class="fa-solid fa-coins" style="color:#0e2b22; font-size:18px"></i></div>
+      <div><div class="font-display font-bold text-lg leading-tight" style="color:#f0c453">Expenses</div><div class="text-[10px] tracking-widest uppercase" style="color:rgba(240,196,83,.6)">Management System</div></div>
+    </div>
+  </div>
+  <div class="px-6 pb-4">
+    <div class="rounded-lg p-3" style="background:rgba(201,151,26,.08); border:1px solid rgba(201,151,26,.15)">
+      <div class="text-[10px] uppercase tracking-wider mb-1" style="color:rgba(240,196,83,.6)">Current Balance</div>
+      <div class="font-mono font-bold text-xl" style="color:#f0c453" id="sidebar-balance">₹0.00</div>
+      <div class="flex items-center gap-2 mt-1.5"><div class="pulse-dot"></div><span class="text-[11px]" style="color:rgba(240,196,83,.7)">Live · Auto-updated</span></div>
+    </div>
+  </div>
+  <div class="flex-1 overflow-y-auto pb-4">
+    <div class="nav-section-label">Operations</div>
+    <div class="nav-item active" data-nav="dashboard"><i class="fa-solid fa-gauge-high"></i> Dashboard</div>
+    <div class="nav-item" data-nav="expense"><i class="fa-solid fa-minus-circle"></i> New Expense</div>
+    <div class="nav-item" data-nav="utr-entry"><i class="fa-solid fa-stamp"></i> UTR &amp; Closing Entry</div>
+    <div class="nav-item" data-nav="transactions"><i class="fa-solid fa-list-check"></i> Transaction Register</div>
+    
+    <div class="nav-section-label">Masters</div>
+    <div class="nav-item" data-nav="vendors"><i class="fa-solid fa-users"></i> Vendor Master</div>
+    <div class="nav-item admin-only hidden" data-nav="master-heads"><i class="fa-solid fa-tags"></i> Head &amp; Sub-Head</div>
+    <div class="nav-item admin-only hidden" data-nav="users"><i class="fa-solid fa-user-gear"></i> User Management</div>
+    
+    <div class="nav-section-label">Insights</div>
+    <div class="nav-item admin-only hidden" data-nav="approvals"><i class="fa-solid fa-circle-check"></i> Pending Approvals</div>
+    <div class="nav-item" data-nav="reports"><i class="fa-solid fa-chart-pie"></i> Reports</div>
+    <div class="nav-item" data-nav="deleted"><i class="fa-solid fa-trash-can"></i> Deleted Records</div>
+    <div class="nav-item" data-nav="audit"><i class="fa-solid fa-clock-rotate-left"></i> Audit Trail</div>
+    <div class="nav-item" data-nav="backup"><i class="fa-solid fa-database"></i> Backup &amp; Restore</div>
+  </div>
+  <div class="px-4 py-3 border-t" style="border-color:rgba(201,151,26,.15)">
+    <div class="flex items-center gap-3 p-2 rounded-lg cursor-pointer hover:bg-white/5 transition" onclick="openProfileModal()">
+      <div class="user-avatar" id="sidebar-avatar" style="width:36px; height:36px; font-size:13px">AU</div>
+      <div class="flex-1 min-w-0">
+        <div class="text-sm font-semibold truncate" style="color:#f0c453" id="sidebar-username">Accounts User</div>
+        <div class="text-[11px] truncate" style="color:rgba(240,196,83,.5)" id="sidebar-mobile">+91 —</div>
+      </div>
+      <button onclick="event.stopPropagation(); logout()" class="text-sm p-1.5 rounded hover:bg-white/10 transition" style="color:rgba(240,196,83,.6)" title="Logout"><i class="fa-solid fa-right-from-bracket"></i></button>
+    </div>
+  </div>
+</aside>
+
+<div class="main">
+  <header class="topbar">
+    <button class="mobile-toggle btn btn-ghost btn-icon" onclick="document.getElementById('sidebar').classList.toggle('open')"><i class="fa-solid fa-bars"></i></button>
+    <div class="flex-1">
+      <h1 class="font-display font-bold text-xl" id="page-title">Dashboard</h1>
+      <p class="text-xs" style="color:var(--muted)" id="page-subtitle">Overview of expense position and recent activity</p>
+    </div>
+    <div class="hidden md:flex items-center gap-3 px-4 py-2 rounded-lg" style="background:var(--surface2); border:1px solid var(--border)">
+      <i class="fa-regular fa-calendar" style="color:var(--accent)"></i>
+      <div class="text-sm"><div class="font-semibold" id="today-date">—</div><div class="text-[11px]" style="color:var(--muted)" id="today-time">—</div></div>
+    </div>
+  </header>
+  <div class="content">
+
+    <!-- DASHBOARD -->
+    <section id="sec-dashboard" class="section active">
+      <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4 mb-6">
+        <div class="stat-card green"><div class="flex items-start justify-between"><div><div class="text-[11px] uppercase tracking-wider font-semibold" style="color:var(--muted)">Current Balance</div><div class="balance-display text-2xl mt-1" id="dash-balance">₹0.00</div></div><div class="w-9 h-9 rounded-lg flex items-center justify-center" style="background:#d8efe5"><i class="fa-solid fa-wallet" style="color:#1f6e54"></i></div></div><div class="mt-3 text-[11px]" style="color:var(--muted)">Auto-calculated</div></div>
+        <div class="stat-card red"><div class="flex items-start justify-between"><div><div class="text-[11px] uppercase tracking-wider font-semibold" style="color:var(--muted)">Expenses (Month)</div><div class="balance-display text-2xl mt-1" id="dash-expense">₹0.00</div></div><div class="w-9 h-9 rounded-lg flex items-center justify-center" style="background:#f5ddd7"><i class="fa-solid fa-arrow-trend-down" style="color:#a83b2c"></i></div></div><div class="mt-3 text-[11px]" style="color:var(--muted)" id="dash-expense-count">0 transactions</div></div>
+        <div class="stat-card green"><div class="flex items-start justify-between"><div><div class="text-[11px] uppercase tracking-wider font-semibold" style="color:var(--muted)">Funds Received (Month)</div><div class="balance-display text-2xl mt-1" id="dash-received">₹0.00</div></div><div class="w-9 h-9 rounded-lg flex items-center justify-center" style="background:#d8efe5"><i class="fa-solid fa-arrow-trend-up" style="color:#1f6e54"></i></div></div><div class="mt-3 text-[11px]" style="color:var(--muted)" id="dash-received-count">0 receipts</div></div>
+        <div class="stat-card blue"><div class="flex items-start justify-between"><div><div class="text-[11px] uppercase tracking-wider font-semibold" style="color:var(--muted)">Active Vendors</div><div class="balance-display text-2xl mt-1" id="dash-vendors">0</div></div><div class="w-9 h-9 rounded-lg flex items-center justify-center" style="background:#d6e7f0"><i class="fa-solid fa-users" style="color:#356a85"></i></div></div><div class="mt-3 text-[11px]" style="color:var(--muted)">In vendor master</div></div>
+        <div class="stat-card purple"><div class="flex items-start justify-between"><div><div class="text-[11px] uppercase tracking-wider font-semibold" style="color:var(--muted)">Total Transactions</div><div class="balance-display text-2xl mt-1" id="dash-transactions">0</div></div><div class="w-9 h-9 rounded-lg flex items-center justify-center" style="background:#ece0f0"><i class="fa-solid fa-receipt" style="color:#7c4a8d"></i></div></div><div class="mt-3 text-[11px]" style="color:var(--muted)">All-time records</div></div>
+      </div>
+      <div class="grid grid-cols-1 lg:grid-cols-3 gap-5 mb-6">
+        <div class="card p-5 lg:col-span-2"><div class="flex items-center justify-between mb-4"><div><h3 class="font-display font-bold text-base">Cash Flow — Last 30 Days</h3><p class="text-xs" style="color:var(--muted)">Daily funds in vs expenses out</p></div><div class="flex gap-3 text-[11px]"><span class="flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-full" style="background:#1f6e54"></span> Cash In</span><span class="flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-full" style="background:#a83b2c"></span> Cash Out</span></div></div><div style="height:260px"><canvas id="chart-cashflow"></canvas></div></div>
+        <div class="card p-5"><h3 class="font-display font-bold text-base mb-1">Expense Breakdown</h3><p class="text-xs mb-4" style="color:var(--muted)">By expense head</p><div style="height:220px"><canvas id="chart-heads"></canvas></div><div id="heads-legend" class="mt-3 space-y-1.5 text-xs"></div></div>
+      </div>
+      <div class="grid grid-cols-1 lg:grid-cols-2 gap-5">
+        <div class="card p-5"><div class="flex items-center justify-between mb-4"><h3 class="font-display font-bold text-base">Recent Transactions</h3><button class="btn btn-ghost btn-sm" onclick="navTo('transactions')">View All <i class="fa-solid fa-arrow-right"></i></button></div><div class="overflow-x-auto"><table class="data-table"><thead><tr><th>Date</th><th>ID</th><th>Type</th><th>Description</th><th class="text-right">Amount</th></tr></thead><tbody id="dash-recent"></tbody></table></div></div>
+        <div class="card p-5"><h3 class="font-display font-bold text-base mb-4">Top Vendors (by volume)</h3><div id="dash-top-vendors" class="space-y-3"></div></div>
+      </div>
+    </section>
+
+    <!-- NEW EXPENSE -->
+    <section id="sec-expense" class="section">
+      <div class="grid grid-cols-1 lg:grid-cols-3 gap-5">
+        <div class="lg:col-span-2">
+          <div class="card p-6">
+            <div class="flex items-center justify-between mb-5 pb-4 border-b" style="border-color:var(--border)"><div><h3 class="font-display font-bold text-lg">Record New Expense</h3><p class="text-xs" style="color:var(--muted)">All amounts auto-update the balance</p></div><div class="badge badge-amber"><i class="fa-solid fa-minus-circle"></i> Cash Out</div></div>
+            <form id="expense-form" onsubmit="return submitExpense(event)">
+              <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+                <div><label class="field-label">Transaction Date</label><input type="date" class="input" id="exp-date" required></div>
+                <div><label class="field-label">Expense ID</label><input type="text" class="input readonly" id="exp-id" readonly></div>
+                <div><label class="field-label">Payment Mode</label><select class="select" id="exp-mode" required><option value="Cash">Cash</option><option value="Online">Online Payment</option></select></div>
+              </div>
+              <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+                <div><label class="field-label">Vendor <span style="color:var(--danger)">*</span></label><div class="search-select" id="vendor-search-wrap"><input type="text" class="input" id="vendor-search" placeholder="Search vendor..." autocomplete="off" required><input type="hidden" id="exp-vendor-id"><div class="search-select-dropdown" id="vendor-dropdown"></div></div></div>
+                <div><label class="field-label">Expense Head</label><select class="select" id="exp-head" required></select></div>
+                <div><label class="field-label">Sub Head</label><select class="select" id="exp-subhead" required></select></div>
+              </div>
+              <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                <div><label class="field-label">Description</label><input type="text" class="input" id="exp-desc" placeholder="Brief description of expense" required></div>
+                <div><label class="field-label">Invoice / Bill Number</label><input type="text" class="input" id="exp-bill" placeholder="Optional"></div>
+              </div>
+              <div class="mb-4">
+                <div class="flex items-center justify-between mb-2"><label class="field-label !mb-0">Line Items</label><button type="button" class="btn btn-ghost btn-sm" onclick="addItemRow()"><i class="fa-solid fa-plus"></i> Add Item</button></div>
+                <div class="overflow-x-auto border rounded-lg" style="border-color:var(--border)"><table class="data-table items-table"><thead><tr><th style="width:40px">Sr</th><th>Item Name</th><th style="width:80px">Qty</th><th style="width:100px">Rate</th><th style="width:110px">Total</th><th style="width:40px"></th></tr></thead><tbody id="items-tbody"></tbody></table></div>
+              </div>
+              <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                <div><label class="field-label">Bill Attachment</label><input type="file" class="input" id="exp-attachment" accept="image/*,.pdf"></div>
+                <div class="rounded-lg p-4" style="background:var(--surface2); border:1px solid var(--border)">
+                  <div class="flex items-center justify-between mb-2"><span class="text-xs font-semibold" style="color:var(--muted)">SUBTOTAL</span><span class="font-mono font-bold" id="exp-subtotal">₹0.00</span></div>
+                  <label class="checkbox-wrap text-sm mb-2"><input type="checkbox" id="exp-tds-applicable" onchange="toggleTds()"><span>TDS Applicable</span></label>
+                  <div id="tds-section" style="display:none"><div class="flex items-center gap-2 mb-2"><span class="text-xs flex-1">TDS Rate (%)</span><input type="number" min="0" max="100" step="0.01" class="input !py-1.5" style="width:80px" id="exp-tds-rate" value="0" oninput="calcTds()"><span class="font-mono font-bold text-sm" id="exp-tds-amount">₹0.00</span></div></div>
+                  <div class="flex items-center justify-between pt-2 border-t" style="border-color:var(--border)"><span class="text-sm font-semibold">FINAL TOTAL</span><span class="font-mono font-bold text-lg" style="color:var(--danger)" id="exp-final-total">₹0.00</span></div>
+                </div>
+              </div>
+              <div class="mb-4">
+                <label class="field-label">Remarks</label>
+                <textarea class="textarea" id="exp-remarks" rows="2" placeholder="Optional notes"></textarea>
+              </div>
+              <div class="flex justify-end gap-3 pt-4 border-t" style="border-color:var(--border)"><button type="button" class="btn btn-ghost" onclick="resetExpenseForm()">Reset</button><button type="submit" class="btn btn-primary"><i class="fa-solid fa-save"></i> Save Expense</button></div>
+            </form>
+          </div>
+        </div>
+        <div class="space-y-5">
+          <div class="card p-5"><h3 class="font-display font-bold text-base mb-3">Quick Info</h3><div class="space-y-3 text-sm"><div class="flex justify-between"><span style="color:var(--muted)">Expense ID Format</span><span class="font-mono font-semibold">PC-YYYYMM-####</span></div><div class="flex justify-between"><span style="color:var(--muted)">Sequence resets</span><span class="font-semibold">Monthly</span></div><div class="flex justify-between"><span style="color:var(--muted)">Current Sequence</span><span class="font-mono font-semibold" id="info-seq">0001</span></div><div class="flex justify-between"><span style="color:var(--muted)">Available Balance</span><span class="font-mono font-semibold" style="color:var(--success)" id="info-balance">₹0.00</span></div></div></div>
+          <div class="card p-5"><h3 class="font-display font-bold text-base mb-3">Tips</h3><ul class="text-xs space-y-2" style="color:var(--muted)"><li class="flex gap-2"><i class="fa-solid fa-circle-info mt-0.5" style="color:var(--accent)"></i> Use line items for multi-item bills; total auto-calculates.</li><li class="flex gap-2"><i class="fa-solid fa-circle-info mt-0.5" style="color:var(--accent)"></i> Tick TDS box to auto-deduct TDS from subtotal.</li><li class="flex gap-2"><i class="fa-solid fa-circle-info mt-0.5" style="color:var(--accent)"></i> System prevents negative balance.</li><li class="flex gap-2"><i class="fa-solid fa-circle-info mt-0.5" style="color:var(--accent)"></i> Attach bills as image or PDF for audit trail.</li></ul></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- UTR & CLOSING ENTRY -->
+    <section id="sec-utr-entry" class="section">
+      <div class="card p-5">
+        <div class="flex flex-wrap items-center justify-between gap-3 mb-4">
+          <div>
+            <h3 class="font-display font-bold text-lg">UTR &amp; Closing Entry</h3>
+            <p class="text-xs" style="color:var(--muted)">Enter UTR/Reference number to close pending expense transactions. Once closed, entries cannot be modified.</p>
+          </div>
+        </div>
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-3 mb-4 p-3 rounded-lg" style="background:var(--surface2); border:1px solid var(--border)">
+          <input type="text" class="input md:col-span-3" id="utr-search" placeholder="Search by Txn ID, Vendor, Description..." oninput="renderUtrEntry()">
+        </div>
+        <div class="overflow-x-auto">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>Date</th>
+                <th>Txn ID</th>
+                <th>Vendor</th>
+                <th>Description</th>
+                <th>Bill No</th>
+                <th class="text-right">Amount</th>
+                <th>Status</th>
+                <th>Action</th>
+              </tr>
+            </thead>
+            <tbody id="utr-tbody"></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- TRANSACTIONS -->
+    <section id="sec-transactions" class="section">
+      <div class="card p-5">
+        <div class="flex flex-wrap items-center justify-between gap-3 mb-4"><div><h3 class="font-display font-bold text-lg">Transaction Register</h3><p class="text-xs" style="color:var(--muted)">Complete ledger with filters, sort, and pagination</p></div><div class="flex gap-2"><button class="btn btn-ghost btn-sm" onclick="exportTransactions('excel')"><i class="fa-solid fa-file-excel"></i> Excel</button><button class="btn btn-ghost btn-sm" onclick="exportTransactions('pdf')"><i class="fa-solid fa-file-pdf"></i> PDF</button><button class="btn btn-ghost btn-sm" onclick="window.print()"><i class="fa-solid fa-print"></i> Print</button></div></div>
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-3 mb-4 p-3 rounded-lg" style="background:var(--surface2); border:1px solid var(--border)">
+          <input type="text" class="input" id="trx-search" placeholder="Search..." oninput="renderTransactions()">
+          <input type="date" class="input" id="trx-from" oninput="renderTransactions()">
+          <input type="date" class="input" id="trx-to" oninput="renderTransactions()">
+          <select class="select" id="trx-vendor" onchange="renderTransactions()"><option value="">All Vendors</option></select>
+          <select class="select" id="trx-type" onchange="renderTransactions()"><option value="">All Types</option><option value="Cash In">Cash In</option><option value="Cash Out">Cash Out</option></select>
+          <select class="select" id="trx-head" onchange="renderTransactions()"><option value="">All Heads</option></select>
+          <select class="select" id="trx-sort" onchange="renderTransactions()"><option value="date-desc">Newest First</option><option value="date-asc">Oldest First</option><option value="amount-desc">Amount: High to Low</option><option value="amount-asc">Amount: Low to High</option></select>
+          <button class="btn btn-ghost btn-sm" onclick="clearTrxFilters()"><i class="fa-solid fa-rotate-left"></i> Clear Filters</button>
+        </div>
+        <div class="overflow-x-auto"><table class="data-table"><thead><tr><th>Date</th><th>Transaction ID</th><th>Type</th><th>Vendor</th><th>Description</th><th>Opening</th><th>Amount</th><th>Closing</th><th>Mode</th><th>UTR / Status</th><th>Created By</th><th>Actions</th></tr></thead><tbody id="trx-tbody"></tbody></table></div>
+        <div class="flex flex-wrap items-center justify-between gap-3 mt-4 pt-4 border-t" style="border-color:var(--border)"><div class="text-xs" style="color:var(--muted)" id="trx-info">Showing 0 of 0</div><div class="flex items-center gap-1" id="trx-pagination"></div></div>
+      </div>
+    </section>
+
+    <!-- VENDORS -->
+    <section id="sec-vendors" class="section">
+      <div class="grid grid-cols-1 lg:grid-cols-3 gap-5">
+        <div class="lg:col-span-2 card p-5">
+          <div class="flex items-center justify-between mb-4"><div><h3 class="font-display font-bold text-lg">Vendor Master</h3><p class="text-xs" style="color:var(--muted)">All registered vendors</p></div><button class="btn btn-accent btn-sm" onclick="openVendorModal()"><i class="fa-solid fa-plus"></i> Add New Vendor</button></div>
+          <div class="mb-3"><input type="text" class="input" id="vendor-search-master" placeholder="Search vendor by name, contact, address..." oninput="renderVendors()"></div>
+          <div class="overflow-x-auto"><table class="data-table"><thead><tr><th>Vendor ID</th><th>Name</th><th>Contact</th><th>Mode</th><th>Bank Details</th><th>Created</th><th>Actions</th></tr></thead><tbody id="vendors-tbody"></tbody></table></div>
+        </div>
+        <div class="card p-5">
+          <h3 class="font-display font-bold text-base mb-3">Quick Add Vendor</h3>
+          <form id="quick-vendor-form" onsubmit="return quickAddVendor(event)">
+            <div class="space-y-3">
+              <div><label class="field-label">Vendor Name <span style="color:var(--danger)">*</span></label><input type="text" class="input" id="qv-name" required></div>
+              <div><label class="field-label">Contact Number</label><input type="text" class="input" id="qv-contact"></div>
+              <div><label class="field-label">Address</label><textarea class="textarea" id="qv-address" rows="2"></textarea></div>
+              <div><label class="field-label">Mode</label><select class="select" id="qv-mode" onchange="toggleBankFields(this.value, 'qv-bank-section')"><option value="Cash">Cash</option><option value="Online">Online</option><option value="Both">Both</option></select></div>
+              <div id="qv-bank-section" style="display:none;">
+                <div class="p-3 rounded-lg mt-1" style="background:var(--surface2); border:1px solid var(--border)">
+                  <div class="text-[11px] uppercase font-semibold mb-2" style="color:var(--muted)">Bank Account Details</div>
+                  <div class="space-y-2">
+                    <input type="text" class="input" id="qv-bene" placeholder="Beneficiary Name">
+                    <input type="text" class="input" id="qv-acc" placeholder="Account Number">
+                    <input type="text" class="input" id="qv-ifsc" placeholder="IFSC Code">
+                  </div>
+                </div>
+              </div>
+              <button type="submit" class="btn btn-primary w-full justify-center"><i class="fa-solid fa-save"></i> Save Vendor</button>
+            </div>
+          </form>
+        </div>
+      </div>
+    </section>
+
+    <!-- MASTER HEADS (Admin Only) -->
+    <section id="sec-master-heads" class="section">
+      <div class="grid grid-cols-1 lg:grid-cols-2 gap-5">
+        <div class="card p-5"><h3 class="font-display font-bold text-lg mb-4 pb-3 border-b" style="border-color:var(--border)">Expense Heads (Master)</h3><form id="head-form" onsubmit="return addMasterHead(event)" class="space-y-3 mb-5"><div class="grid grid-cols-1 md:grid-cols-2 gap-3"><div><label class="field-label">Head Name <span style="color:var(--danger)">*</span></label><input type="text" class="input" id="mh-name" placeholder="e.g. Stationery & Printing" required></div><div><label class="field-label">Type</label><select class="select" id="mh-type"><option value="expense">Expense</option><option value="income">Income</option></select></div></div><button type="submit" class="btn btn-primary btn-sm"><i class="fa-solid fa-plus"></i> Add Master Head</button></form><div class="overflow-x-auto"><table class="data-table"><thead><tr><th>ID</th><th>Head Name</th><th>Type</th><th>Sub-Heads</th><th>Actions</th></tr></thead><tbody id="heads-tbody"></tbody></table></div></div>
+        <div class="card p-5"><h3 class="font-display font-bold text-lg mb-4 pb-3 border-b" style="border-color:var(--border)">Sub-Heads</h3><form id="subhead-form" onsubmit="return addSubHead(event)" class="space-y-3 mb-5"><div class="grid grid-cols-1 md:grid-cols-2 gap-3"><div><label class="field-label">Parent Head <span style="color:var(--danger)">*</span></label><select class="select" id="sh-parent" required></select></div><div><label class="field-label">Sub-Head Name <span style="color:var(--danger)">*</span></label><input type="text" class="input" id="sh-name" placeholder="e.g. Printing" required></div></div><button type="submit" class="btn btn-primary btn-sm"><i class="fa-solid fa-plus"></i> Add Sub-Head</button></form><div id="subheads-list" class="space-y-3 max-h-[400px] overflow-y-auto"></div></div>
+      </div>
+    </section>
+
+    <!-- USER MANAGEMENT (Admin Only) -->
+    <section id="sec-users" class="section">
+      <div class="grid grid-cols-1 lg:grid-cols-3 gap-5">
+        <div class="lg:col-span-2 card p-5"><div class="flex items-center justify-between mb-4"><div><h3 class="font-display font-bold text-lg">User Management</h3><p class="text-xs" style="color:var(--muted)">All registered users with access to the system</p></div><button class="btn btn-accent btn-sm" onclick="openUserModal()"><i class="fa-solid fa-user-plus"></i> Add User</button></div><div class="overflow-x-auto"><table class="data-table"><thead><tr><th>User ID</th><th>Name</th><th>Username</th><th>Mobile</th><th>Role</th><th>Created</th><th>Last Login</th><th>Status</th><th>Actions</th></tr></thead><tbody id="users-tbody"></tbody></table></div></div>
+        <div class="card p-5"><h3 class="font-display font-bold text-base mb-3">Current Session</h3><div class="rounded-lg p-4 mb-4" style="background:linear-gradient(135deg, rgba(14,43,34,.04), rgba(201,151,26,.06)); border:1px solid var(--border)"><div class="flex items-center gap-3 mb-3"><div class="user-avatar" id="session-avatar" style="width:48px; height:48px; font-size:18px">AU</div><div><div class="font-bold text-base" id="session-name">Accounts User</div><div class="text-xs" style="color:var(--muted)" id="session-username">@admin</div></div></div><div class="space-y-2 text-sm"><div class="flex justify-between"><span style="color:var(--muted)">Mobile</span><span class="font-mono" id="session-mobile">—</span></div><div class="flex justify-between"><span style="color:var(--muted)">Role</span><span id="session-role">Administrator</span></div><div class="flex justify-between"><span style="color:var(--muted)">Login Time</span><span class="text-xs" id="session-logintime">—</span></div></div></div><button class="btn btn-ghost w-full justify-center" onclick="logout()"><i class="fa-solid fa-right-from-bracket"></i> Sign Out</button></div>
+      </div>
+    </section>
+
+    <!-- APPROVALS (Admin Only) -->
+    <section id="sec-approvals" class="section">
+      <div class="card p-5">
+        <div class="flex items-center justify-between mb-4"><div><h3 class="font-display font-bold text-lg">Pending Deletion Approvals</h3><p class="text-xs" style="color:var(--muted)">Review and approve/reject deletion requests from users</p></div></div>
+        <div class="overflow-x-auto"><table class="data-table"><thead><tr><th>Transaction ID</th><th>Date</th><th>Type</th><th>Description</th><th class="text-right">Amount</th><th>Requested By</th><th>Request Date</th><th>Reason</th><th>Actions</th></tr></thead><tbody id="approvals-tbody"></tbody></table></div>
+      </div>
+    </section>
+
+    <!-- REPORTS -->
+    <section id="sec-reports" class="section">
+      <div class="card p-5">
+        <div class="flex flex-wrap items-center justify-between gap-3 mb-4"><div><h3 class="font-display font-bold text-lg">Reports &amp; Analytics</h3><p class="text-xs" style="color:var(--muted)">Generate detailed financial reports</p></div><div class="flex gap-2"><button class="btn btn-ghost btn-sm" onclick="exportReport('excel')"><i class="fa-solid fa-file-excel"></i> Excel</button><button class="btn btn-ghost btn-sm" onclick="exportReport('pdf')"><i class="fa-solid fa-file-pdf"></i> PDF</button><button class="btn btn-ghost btn-sm" onclick="printReport()"><i class="fa-solid fa-print"></i> Print</button></div></div>
+        <div class="flex flex-wrap gap-2 mb-4 border-b pb-3" style="border-color:var(--border)"><button class="tab-btn active" data-report="daily" onclick="switchReport('daily')">Daily Expense</button><button class="tab-btn" data-report="monthly" onclick="switchReport('monthly')">Monthly Summary</button><button class="tab-btn" data-report="vendor" onclick="switchReport('vendor')">Vendor-wise</button><button class="tab-btn" data-report="head" onclick="switchReport('head')">Head-wise</button><button class="tab-btn" data-report="inout" onclick="switchReport('inout')">Cash In vs Out</button><button class="tab-btn" data-report="closing" onclick="switchReport('closing')">Closing Balance</button></div>
+        <div class="grid grid-cols-1 md:grid-cols-4 gap-3 mb-4 p-3 rounded-lg" style="background:var(--surface2); border:1px solid var(--border)"><div><label class="field-label">From Date</label><input type="date" class="input" id="rpt-from"></div><div><label class="field-label">To Date</label><input type="date" class="input" id="rpt-to"></div><div class="flex items-end"><button class="btn btn-accent w-full justify-center" onclick="generateReport()"><i class="fa-solid fa-magnifying-glass"></i> Generate</button></div><div class="flex items-end"><button class="btn btn-ghost w-full justify-center" onclick="setReportPreset('thisMonth')">This Month</button></div></div>
+        <div id="report-summary" class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4"></div>
+        <div class="overflow-x-auto"><table class="data-table" id="report-table"><thead><tr><th>No data</th></tr></thead><tbody></tbody></table></div>
+      </div>
+    </section>
+
+    <!-- DELETED TRANSACTIONS -->
+    <section id="sec-deleted" class="section">
+      <div class="card p-5">
+        <div class="flex flex-wrap items-center justify-between gap-3 mb-4"><div><h3 class="font-display font-bold text-lg">Deleted Transactions Report</h3><p class="text-xs" style="color:var(--muted)">Complete audit trail of all deleted transactions with date &amp; time</p></div><div class="flex gap-2"><button class="btn btn-ghost btn-sm" onclick="exportDeleted('excel')"><i class="fa-solid fa-file-excel"></i> Excel</button><button class="btn btn-ghost btn-sm" onclick="exportDeleted('pdf')"><i class="fa-solid fa-file-pdf"></i> PDF</button><button class="btn btn-ghost btn-sm" onclick="printDeleted()"><i class="fa-solid fa-print"></i> Print</button></div></div>
+        <div id="deleted-summary" class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4"></div>
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-3 mb-4 p-3 rounded-lg" style="background:var(--surface2); border:1px solid var(--border)"><input type="text" class="input" id="del-search" placeholder="Search by ID, vendor..." oninput="renderDeleted()"><input type="date" class="input" id="del-from" oninput="renderDeleted()" title="Deleted from date"><input type="date" class="input" id="del-to" oninput="renderDeleted()" title="Deleted to date"><select class="select" id="del-user" onchange="renderDeleted()"><option value="">All Users</option></select><select class="select" id="del-type" onchange="renderDeleted()"><option value="">All Types</option><option value="Cash In">Cash In</option><option value="Cash Out">Cash Out</option></select></div>
+        <div class="overflow-x-auto"><table class="data-table"><thead><tr><th>Original Txn ID</th><th>Orig. Date</th><th>Type</th><th>Vendor / Source</th><th>Description</th><th class="text-right">Amount</th><th>Deleted By</th><th>Deleted Date &amp; Time</th><th>Reason</th><th>Actions</th></tr></thead><tbody id="deleted-tbody"></tbody></table></div>
+        <div class="flex flex-wrap items-center justify-between gap-3 mt-4 pt-4 border-t" style="border-color:var(--border)"><div class="text-xs" style="color:var(--muted)" id="deleted-info">Showing 0 of 0</div><div class="flex items-center gap-1" id="deleted-pagination"></div></div>
+      </div>
+    </section>
+
+    <!-- AUDIT TRAIL -->
+    <section id="sec-audit" class="section">
+      <div class="card p-5"><h3 class="font-display font-bold text-lg mb-1">Audit Trail</h3><p class="text-xs mb-4" style="color:var(--muted)">Complete transaction history with creation and modification tracking</p><div class="grid grid-cols-1 md:grid-cols-3 gap-3 mb-4 p-3 rounded-lg" style="background:var(--surface2); border:1px solid var(--border)"><input type="text" class="input" id="audit-search" placeholder="Search by ID, user..." oninput="renderAudit()"><input type="date" class="input" id="audit-from" oninput="renderAudit()"><input type="date" class="input" id="audit-to" oninput="renderAudit()"></div><div class="overflow-x-auto"><table class="data-table"><thead><tr><th>Transaction ID</th><th>Type</th><th>Amount</th><th>Created By</th><th>Created Date/Time</th><th>Modified By</th><th>Modified Date/Time</th><th>Status</th></tr></thead><tbody id="audit-tbody"></tbody></table></div></div>
+    </section>
+
+    <!-- BACKUP -->
+    <section id="sec-backup" class="section">
+      <div class="grid grid-cols-1 lg:grid-cols-2 gap-5">
+        <div class="card p-6 mb-5">
+          <h3 class="font-display font-bold text-lg mb-2">Local Windows Backup</h3>
+          <p class="text-xs mb-4" style="color:var(--muted)">Export, import, or connect to a local file on your Windows drive.</p>
+          <div id="backup-connect-area">
+            <button class="btn btn-primary w-full justify-center" onclick="connectLocalBackup()"><i class="fa-solid fa-plug"></i> Connect Local Backup File (Windows)</button>
+          </div>
+          <div id="local-sync-status" class="text-xs text-center mt-2" style="color:var(--muted)">Not connected to a local file.</div>
+          <hr class="my-4" style="border-color:var(--border)">
+          <button class="btn btn-ghost w-full justify-center mb-2" onclick="exportBackup()"><i class="fa-solid fa-download"></i> Download Backup (JSON)</button>
+          <label class="btn btn-ghost w-full justify-center cursor-pointer mb-2"><i class="fa-solid fa-upload"></i> Restore from Backup<input type="file" accept=".json" style="display:none" onchange="importBackup(event)"></label>
+          <hr class="my-4" style="border-color:var(--border)">
+          <button class="btn btn-danger w-full justify-center" onclick="confirmClearData()"><i class="fa-solid fa-trash"></i> Clear All Data (Admin Only)</button>
+        </div>
+        <div class="card p-6">
+          <h3 class="font-display font-bold text-lg mb-2">Storage Statistics</h3>
+          <div id="storage-stats" class="space-y-3"></div>
+        </div>
+      </div>
+    </section>
+
+  </div>
+</div>
+</div>
+
+<div class="modal-backdrop" id="modal-backdrop" onclick="if(event.target===this) closeModal()"><div class="modal" id="modal-content"></div></div>
+<div class="toast-container" id="toast-container"></div>
+
+<script>
+// =================================================================
+// SUPABASE CONFIGURATION
+// Replace these with your actual Supabase URL and Anon Key
+// =================================================================
+const SUPABASE_URL = 'YOUR_SUPABASE_URL'; 
+const SUPABASE_KEY = 'YOUR_SUPABASE_ANON_KEY';
+
+let supabaseClient = null;
+if (SUPABASE_URL !== 'YOUR_SUPABASE_URL' && SUPABASE_KEY !== 'YOUR_SUPABASE_ANON_KEY') {
+  try {
+    supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+  } catch(e) { console.error("Supabase init failed", e); }
+}
+// =================================================================
+
+const STORE_KEY = 'pcms_data_v3';
+const SESSION_KEY = 'pcms_session';
+const ADMIN_SECRET_KEY = "dasdasdsad4as6dfasfwafas1fsafsafas854f1sacxzc0521!!#$";
+
+const defaultData = {
+  users: [], vendors: [], masterHeads: [], subHeads: [],
+  transactions: [], pendingDeletions: [], deletedTransactions: [],
+  expenseSeq: {}, receiptSeq: {},
+  settings: { openingBalance: 0 },
+  initialized: false
+};
+
+let State = JSON.parse(JSON.stringify(defaultData));
+try { const raw = localStorage.getItem(STORE_KEY); if(raw) State = JSON.parse(raw); } catch(e){}
+
+let CurrentUser = null;
+let fileHandle = null; 
+let saveTimeout = null;
+
+const fileDB = {
+  db: null,
+  init() { return new Promise((resolve) => { const req = indexedDB.open('fileHandleDB', 1); req.onupgradeneeded = (e) => e.target.result.createObjectStore('handles'); req.onsuccess = (e) => { this.db = e.target.result; resolve(); }; req.onerror = () => resolve(); }); },
+  set(key, val) { return new Promise((resolve) => { if(!this.db) return resolve(); const tx = this.db.transaction('handles', 'readwrite'); tx.objectStore('handles').put(val, key); tx.oncomplete = () => resolve(); tx.onerror = () => resolve(); }); },
+  get(key) { return new Promise((resolve) => { if(!this.db) return resolve(null); const tx = this.db.transaction('handles', 'readonly'); const req = tx.objectStore('handles').get(key); req.onsuccess = () => resolve(req.result); req.onerror = () => resolve(null); }); },
+  delete(key) { return new Promise((resolve) => { if(!this.db) return resolve(); const tx = this.db.transaction('handles', 'readwrite'); tx.objectStore('handles').delete(key); tx.oncomplete = () => resolve(); tx.onerror = () => resolve(); }); }
+};
+
+async function loadData(){
+  if (!supabaseClient) return;
+  try {
+    const { data, error } = await supabaseClient.from('app_data').select('data').eq('id', 1).single();
+    if (error && error.code !== 'PGRST116') throw error;
+    if (data && data.data && Object.keys(data.data).length > 0) {
+      State = data.data;
+      localStorage.setItem(STORE_KEY, JSON.stringify(State));
+    }
+  } catch(e){ console.error('Supabase load failed, using local cache:', e); toast('Cloud sync failed. Loaded from local backup.', 'warning'); }
+}
+
+async function saveData(){
+  localStorage.setItem(STORE_KEY, JSON.stringify(State));
+  if (!supabaseClient) return;
+  clearTimeout(saveTimeout);
+  saveTimeout = setTimeout(async () => {
+    try {
+      const { error } = await supabaseClient.from('app_data').upsert({ id: 1, data: State, updated_at: new Date().toISOString() });
+      if (error) throw error;
+    } catch(e) { console.error('Supabase save failed:', e); toast('Cloud sync failed. Data saved locally.', 'warning'); }
+  }, 500);
+}
+
+function seedDataIfEmpty(){
+  let dataChanged = false;
+  let adminUser = State.users.find(u => u.username.toLowerCase() === 'mangesh');
+  if(!adminUser) {
+     State.users.push({ id: 'U001', name: 'Mangesh', username: 'Mangesh', mobile: '9999999999', password: 'Binery*2026', role: 'Administrator', createdDate: new Date().toISOString(), lastLogin: null });
+     dataChanged = true;
+  } else {
+     if(adminUser.password !== 'Binery*2026' || adminUser.role !== 'Administrator') {
+        adminUser.password = 'Binery*2026';
+        adminUser.role = 'Administrator';
+        dataChanged = true;
+     }
+  }
+
+  if(State.initialized && !dataChanged) return;
+
+  if(!State.initialized) {
+    const heads = [
+      {id:'MH001', name:'Stationery & Printing', type:'expense'},
+      {id:'MH002', name:'Maintenance & Repairs', type:'expense'},
+      {id:'MH003', name:'Travel & Conveyance', type:'expense'},
+      {id:'MH004', name:'Office Supplies', type:'expense'},
+      {id:'MH005', name:'Refreshments', type:'expense'},
+      {id:'MH006', name:'Utilities', type:'expense'},
+      {id:'MH007', name:'Miscellaneous', type:'expense'}
+    ];
+    State.masterHeads = heads;
+
+    const subHeads = [
+      {id:'SH001', masterHeadId:'MH001', name:'Pens & Pencils'}, {id:'SH002', masterHeadId:'MH001', name:'Photocopy & Print'}, {id:'SH003', masterHeadId:'MH001', name:'Notebooks & Registers'},
+      {id:'SH004', masterHeadId:'MH002', name:'Electrical Repairs'}, {id:'SH005', masterHeadId:'MH002', name:'Plumbing'}, {id:'SH006', masterHeadId:'MH002', name:'Furniture Repair'},
+      {id:'SH007', masterHeadId:'MH003', name:'Vehicle Fuel'}, {id:'SH008', masterHeadId:'MH003', name:'Taxi Fare'},
+      {id:'SH009', masterHeadId:'MH004', name:'Cleaning Materials'}, {id:'SH010', masterHeadId:'MH004', name:'Hardware'},
+      {id:'SH011', masterHeadId:'MH005', name:'Tea & Coffee'}, {id:'SH012', masterHeadId:'MH005', name:'Staff Lunch'},
+      {id:'SH013', masterHeadId:'MH006', name:'Electricity'}, {id:'SH014', masterHeadId:'MH006', name:'Internet & Phone'},
+      {id:'SH015', masterHeadId:'MH007', name:'Miscellaneous Expense'}
+    ];
+    State.subHeads = subHeads;
+    State.initialized = true;
+  }
+  
+  saveData();
+}
+
+function genId(prefix, date){ const ym = date.toISOString().substr(0,7).replace('-',''); const seq = (prefix === 'PC' ? State.expenseSeq[ym] : State.receiptSeq[ym]) || 0; const next = seq + 1; if(prefix === 'PC') State.expenseSeq[ym] = next; else State.receiptSeq[ym] = next; return `${prefix}-${ym}-${String(next).padStart(4,'0')}`; }
+
+function fmtMoney(n){ return '₹' + (Number(n) || 0).toLocaleString('en-IN', {minimumFractionDigits:2, maximumFractionDigits:2}); }
+function fmtDate(d){ if(!d) return '—'; return new Date(d).toLocaleDateString('en-IN', {day:'2-digit', month:'short', year:'numeric'}); }
+function fmtDateTime(d){ if(!d) return '—'; return new Date(d).toLocaleString('en-IN', {day:'2-digit', month:'short', year:'numeric', hour:'2-digit', minute:'2-digit'}); }
+function todayStr(){ return new Date().toISOString().split('T')[0]; }
+function isAdmin(){ return CurrentUser && CurrentUser.role === 'Administrator'; }
+function getCurrentBalance(){ if(State.transactions.length === 0) return State.settings.openingBalance || 0; return [...State.transactions].sort((a,b) => (a.date+a.createdDate).localeCompare(b.date+b.createdDate))[State.transactions.length-1].closingBalance; }
+function getVendorName(id){ const v = State.vendors.find(v => v.id === id); return v ? v.name : '—'; }
+function getHeadName(id){ const h = State.masterHeads.find(h => h.id === id); return h ? h.name : '—'; }
+function getSubHeadName(id){ const s = State.subHeads.find(s => s.id === id); return s ? s.name : '—'; }
+function getUserInitials(name){ return name ? name.split(' ').map(w=>w[0]).join('').substr(0,2).toUpperCase() : '?'; }
+
+function toast(msg, type='info', duration=3000){ const c = document.getElementById('toast-container'); const t = document.createElement('div'); t.className = `toast ${type}`; const icons = {success:'fa-circle-check', error:'fa-circle-xmark', warning:'fa-triangle-exclamation', info:'fa-circle-info'}; const colors = {success:'var(--success)', error:'var(--danger)', warning:'var(--warning)', info:'var(--info)'}; t.innerHTML = `<i class="fa-solid ${icons[type]}" style="color:${colors[type]}"></i><span>${msg}</span>`; c.appendChild(t); setTimeout(() => t.classList.add('show'), 10); setTimeout(() => { t.classList.remove('show'); setTimeout(() => t.remove(), 300); }, duration); }
+function openModal(html){ document.getElementById('modal-content').innerHTML = html; document.getElementById('modal-backdrop').classList.add('open'); }
+function closeModal(){ document.getElementById('modal-backdrop').classList.remove('open'); }
+
+// AUTH
+function togglePassword(i, el){ const inp = document.getElementById(i); inp.type = inp.type === 'password' ? 'text' : 'password'; el.classList.toggle('fa-eye'); el.classList.toggle('fa-eye-slash'); }
+function showFieldError(id, m){ const e = document.getElementById(id+'-error'); const i = document.getElementById(id); if(e){e.textContent=m; e.classList.add('show');} if(i) i.classList.add('error'); }
+function clearFieldError(id){ const e = document.getElementById(id+'-error'); const i = document.getElementById(id); if(e) e.classList.remove('show'); if(i) i.classList.remove('error'); }
+
+function handleSignIn(e){
+  e.preventDefault();
+  const u = document.getElementById('signin-username').value.trim();
+  const p = document.getElementById('signin-password').value;
+  ['signin-username','signin-password'].forEach(clearFieldError);
+  if(!u) return showFieldError('signin-username', 'Please enter username or mobile'), false;
+  if(!p) return showFieldError('signin-password', 'Please enter password'), false;
+  const user = State.users.find(x => x.username.toLowerCase() === u.toLowerCase() || x.mobile === u);
+  if(!user) return showFieldError('signin-username', 'User not found'), false;
+  if(user.password !== p) return showFieldError('signin-password', 'Incorrect password'), false;
+  user.lastLogin = new Date().toISOString();
+  saveData();
+  CurrentUser = user;
+  if(document.getElementById('remember-me').checked) sessionStorage.setItem(SESSION_KEY, user.id);
+  showApp();
+  toast(`Welcome back, ${user.name}!`, 'success');
+  return false;
+}
+
+function logout(){ openModal(`<div class="modal-header"><h3 class="font-display font-bold text-lg">Confirm Logout</h3><button onclick="closeModal()" class="text-xl" style="color:rgba(240,196,83,.7)"><i class="fa-solid fa-xmark"></i></button></div><div class="modal-body"><p>Are you sure you want to sign out?</p></div><div class="modal-footer"><button class="btn btn-ghost" onclick="closeModal()">Cancel</button><button class="btn btn-danger" onclick="performLogout()"><i class="fa-solid fa-right-from-bracket"></i> Sign Out</button></div>`); }
+function performLogout(){ CurrentUser = null; sessionStorage.removeItem(SESSION_KEY); document.getElementById('app').style.display = 'none'; document.getElementById('login-screen').classList.remove('hidden'); closeModal(); toast('Signed out', 'info'); }
+function showApp(){
+  document.getElementById('login-screen').classList.add('hidden');
+  document.getElementById('app').style.display = 'block';
+  document.getElementById('sidebar-username').textContent = CurrentUser.name;
+  document.getElementById('sidebar-mobile').textContent = '+91 ' + CurrentUser.mobile;
+  document.getElementById('sidebar-avatar').textContent = getUserInitials(CurrentUser.name);
+  document.querySelectorAll('.admin-only').forEach(el => { if(isAdmin()) el.classList.remove('hidden'); else el.classList.add('hidden'); });
+  renderDashboard();
+  updateClock();
+}
+
+function openProfileModal(){ openModal(`<div class="modal-header"><h3 class="font-display font-bold text-lg">User Profile</h3><button onclick="closeModal()" class="text-xl" style="color:rgba(240,196,83,.7)"><i class="fa-solid fa-xmark"></i></button></div><div class="modal-body"><div class="flex items-center gap-4 mb-5"><div class="user-avatar" style="width:64px; height:64px; font-size:24px">${getUserInitials(CurrentUser.name)}</div><div><div class="font-display font-bold text-xl">${CurrentUser.name}</div><div class="text-sm" style="color:var(--muted)">@${CurrentUser.username}</div><span class="badge ${CurrentUser.role === 'Administrator' ? 'badge-amber' : 'badge-blue'} mt-1">${CurrentUser.role}</span></div></div><div class="space-y-3"><div class="flex justify-between p-3 rounded-lg" style="background:var(--surface2)"><span class="text-sm" style="color:var(--muted)">User ID</span><span class="font-mono font-semibold">${CurrentUser.id}</span></div><div class="flex justify-between p-3 rounded-lg" style="background:var(--surface2)"><span class="text-sm" style="color:var(--muted)">Mobile</span><span class="font-mono font-semibold">+91 ${CurrentUser.mobile}</span></div><div class="flex justify-between p-3 rounded-lg" style="background:var(--surface2)"><span class="text-sm" style="color:var(--muted)">Last Login</span><span class="text-sm">${fmtDateTime(CurrentUser.lastLogin)}</span></div></div></div><div class="modal-footer"><button class="btn btn-ghost" onclick="closeModal()">Close</button><button class="btn btn-danger" onclick="closeModal(); logout()"><i class="fa-solid fa-right-from-bracket"></i> Sign Out</button></div>`); }
+
+// USER MANAGEMENT
+function openUserModal(){ openModal(`<div class="modal-header"><h3 class="font-display font-bold text-lg">Add New User</h3><button onclick="closeModal()" class="text-xl" style="color:rgba(240,196,83,.7)"><i class="fa-solid fa-xmark"></i></button></div><form onsubmit="return saveUserFromModal(event)" class="modal-body space-y-4"><div><label class="field-label">Full Name <span style="color:var(--danger)">*</span></label><input type="text" class="input" id="mu-name" required autofocus></div><div><label class="field-label">Username <span style="color:var(--danger)">*</span></label><input type="text" class="input" id="mu-username" required></div><div><label class="field-label">Mobile Number <span style="color:var(--danger)">*</span></label><input type="tel" class="input" id="mu-mobile" maxlength="10" placeholder="10-digit mobile" required></div><div><label class="field-label">Password <span style="color:var(--danger)">*</span></label><input type="password" class="input" id="mu-password" required></div><div><label class="field-label">Role</label><select class="select" id="mu-role"><option value="User">User</option><option value="Administrator">Administrator</option></select></div><div class="modal-footer !p-0 !bg-transparent !border-0 pt-2"><button type="button" class="btn btn-ghost" onclick="closeModal()">Cancel</button><button type="submit" class="btn btn-primary"><i class="fa-solid fa-save"></i> Save User</button></div></form>`); setTimeout(() => document.getElementById('mu-name').focus(), 100); }
+function saveUserFromModal(e){ e.preventDefault(); const n = document.getElementById('mu-name').value.trim(); const u = document.getElementById('mu-username').value.trim(); const m = document.getElementById('mu-mobile').value.trim(); const p = document.getElementById('mu-password').value; const r = document.getElementById('mu-role').value; if(!n || n.length < 2) return toast('Please enter full name', 'error'), false; if(!u || u.length < 3) return toast('Username must be at least 3 characters', 'error'), false; if(State.users.some(x => x.username.toLowerCase() === u.toLowerCase())) return toast('Username already exists', 'warning'), false; if(!/^[6-9]\d{9}$/.test(m)) return toast('Enter a valid 10-digit mobile number', 'error'), false; if(State.users.some(x => x.mobile === m)) return toast('Mobile number already registered', 'warning'), false; if(!p || p.length < 6) return toast('Password must be at least 6 characters', 'error'), false; State.users.push({ id: 'U'+String(State.users.length+1).padStart(3,'0'), name:n, username:u, mobile:m, password:p, role:r, createdDate: new Date().toISOString(), lastLogin: null }); saveData(); toast('User added successfully', 'success'); closeModal(); renderUsers(); return false; }
+function openEditUserModal(id) { const u = State.users.find(x => x.id === id); if (!u) return; openModal(`<div class="modal-header"><h3 class="font-display font-bold text-lg">Edit User Details</h3><button onclick="closeModal()" class="text-xl" style="color:rgba(240,196,83,.7)"><i class="fa-solid fa-xmark"></i></button></div><form onsubmit="return saveEditUser(event, '${id}')" class="modal-body space-y-4"><div><label class="field-label">Full Name <span style="color:var(--danger)">*</span></label><input type="text" class="input" id="eu-name" value="${u.name}" required autofocus></div><div><label class="field-label">Username <span style="color:var(--danger)">*</span></label><input type="text" class="input" id="eu-username" value="${u.username}" required></div><div><label class="field-label">Mobile Number <span style="color:var(--danger)">*</span></label><input type="tel" class="input" id="eu-mobile" value="${u.mobile}" maxlength="10" required></div><div><label class="field-label">Role</label><select class="select" id="eu-role"><option value="User" ${u.role === 'User' ? 'selected' : ''}>User</option><option value="Administrator" ${u.role === 'Administrator' ? 'selected' : ''}>Administrator</option></select></div><div class="text-xs p-2 rounded" style="background:var(--surface2); color:var(--muted)"><i class="fa-solid fa-lock"></i> Password cannot be edited from here.</div><div class="modal-footer !p-0 !bg-transparent !border-0 pt-2"><button type="button" class="btn btn-ghost" onclick="closeModal()">Cancel</button><button type="submit" class="btn btn-primary"><i class="fa-solid fa-save"></i> Save Changes</button></div></form>`); setTimeout(() => document.getElementById('eu-name').focus(), 100); }
+function saveEditUser(e, id) { e.preventDefault(); const u = State.users.find(x => x.id === id); if (!u) return; const n = document.getElementById('eu-name').value.trim(); const un = document.getElementById('eu-username').value.trim(); const m = document.getElementById('eu-mobile').value.trim(); const r = document.getElementById('eu-role').value; if(!n || n.length < 2) return toast('Please enter full name', 'error'), false; if(!un || un.length < 3) return toast('Username must be at least 3 characters', 'error'), false; if(State.users.some(x => x.id !== id && x.username.toLowerCase() === un.toLowerCase())) return toast('Username already exists', 'warning'), false; if(!/^[6-9]\d{9}$/.test(m)) return toast('Enter a valid 10-digit mobile number', 'error'), false; if(State.users.some(x => x.id !== id && x.mobile === m)) return toast('Mobile number already registered', 'warning'), false; u.name = n; u.username = un; u.mobile = m; u.role = r; saveData(); toast('User details updated', 'success'); closeModal(); renderUsers(); return false; }
+function renderUsers(){ const tbody = document.getElementById('users-tbody'); if(!isAdmin()) return; if(State.users.length === 0) return tbody.innerHTML = '<tr><td colspan="9" class="empty-state"><i class="fa-solid fa-users-slash"></i><div>No users found</div></td></tr>'; tbody.innerHTML = State.users.map(u => `<tr><td><span class="font-mono text-xs font-semibold">${u.id}</span></td><td><div class="flex items-center gap-2"><div class="user-avatar" style="width:28px; height:28px; font-size:10px">${getUserInitials(u.name)}</div><span class="font-semibold">${u.name}</span></div></td><td class="text-xs">@${u.username}</td><td class="font-mono text-xs">+91 ${u.mobile}</td><td><span class="badge ${u.role === 'Administrator' ? 'badge-amber' : 'badge-blue'}">${u.role}</span></td><td class="text-xs">${fmtDate(u.createdDate)}</td><td class="text-xs">${u.lastLogin ? fmtDateTime(u.lastLogin) : 'Never'}</td><td>${u.id === CurrentUser.id ? '<span class="badge badge-green">You</span>' : '<span class="badge badge-gray">Active</span>'}</td><td><div class="flex gap-1"><button class="btn btn-ghost btn-sm btn-icon" onclick="openEditUserModal('${u.id}')" title="Edit"><i class="fa-solid fa-pen-to-square" style="color:var(--info)"></i></button>${u.id !== CurrentUser.id ? `<button class="btn btn-ghost btn-sm btn-icon" onclick="deleteUser('${u.id}')" title="Delete"><i class="fa-solid fa-trash" style="color:var(--danger)"></i></button>` : ''}</div></td></tr>`).join(''); if(CurrentUser){ document.getElementById('session-avatar').textContent = getUserInitials(CurrentUser.name); document.getElementById('session-name').textContent = CurrentUser.name; document.getElementById('session-username').textContent = '@' + CurrentUser.username; document.getElementById('session-mobile').textContent = '+91 ' + CurrentUser.mobile; document.getElementById('session-role').textContent = CurrentUser.role; document.getElementById('session-logintime').textContent = CurrentUser.lastLogin ? fmtDateTime(CurrentUser.lastLogin) : '—'; } }
+function deleteUser(id){ if(id === CurrentUser.id) return toast('Cannot delete your own account', 'error'); const u = State.users.find(x => x.id === id); openModal(`<div class="modal-header" style="background:var(--danger)"><h3 class="font-display font-bold text-lg">Delete User</h3><button onclick="closeModal()" class="text-xl text-white"><i class="fa-solid fa-xmark"></i></button></div><div class="modal-body"><p>Are you sure you want to delete this user?</p><div class="mt-3 p-3 rounded-lg flex items-center gap-3" style="background:var(--surface2)"><div class="user-avatar">${getUserInitials(u.name)}</div><div><div class="font-semibold text-sm">${u.name}</div><div class="text-xs" style="color:var(--muted)">@${u.username} · +91 ${u.mobile}</div></div></div></div><div class="modal-footer"><button class="btn btn-ghost" onclick="closeModal()">Cancel</button><button class="btn btn-danger" onclick="confirmDeleteUser('${id}')"><i class="fa-solid fa-trash"></i> Delete User</button></div>`); }
+function confirmDeleteUser(id){ State.users = State.users.filter(u => u.id !== id); saveData(); toast('User deleted', 'success'); closeModal(); renderUsers(); }
+
+// NAVIGATION
+const pageTitles = { 'dashboard': ['Dashboard', 'Overview of expense position and recent activity'], 'expense': ['New Expense', 'Record a new expense with auto-balance calculation'], 'transactions': ['Transaction Register', 'Complete ledger with filters, sort, and pagination'], 'utr-entry': ['UTR & Closing Entry', 'Enter UTR/Reference numbers to close expenses'], 'vendors': ['Vendor Master', 'Manage vendor records with search and deduplication'], 'master-heads': ['Heads & Sub-Heads', 'Create expense heads and their sub-categories'], 'users': ['User Management', 'Manage user accounts and access'], 'approvals': ['Pending Approvals', 'Review user deletion requests'], 'reports': ['Reports', 'Generate and export detailed financial reports'], 'deleted': ['Deleted Transactions', 'Audit trail of all deleted transactions with date & time'], 'audit': ['Audit Trail', 'Complete history of transaction changes'], 'backup': ['Backup & Restore', 'Export, import, or connect to local/cloud file'] };
+function navTo(section){ const adminSections = ['master-heads', 'users', 'approvals']; if(adminSections.includes(section) && !isAdmin()){ toast('Access Denied: Administrator permission required', 'error'); return; } document.querySelectorAll('.section').forEach(s => s.classList.remove('active')); document.getElementById('sec-' + section).classList.add('active'); document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active')); document.querySelector(`.nav-item[data-nav="${section}"]`)?.classList.add('active'); const [title, sub] = pageTitles[section] || ['', '']; document.getElementById('page-title').textContent = title; document.getElementById('page-subtitle').textContent = sub; document.getElementById('sidebar').classList.remove('open'); if(section === 'dashboard') renderDashboard(); if(section === 'expense') initExpenseForm(); if(section === 'transactions') renderTransactions(); if(section === 'utr-entry') renderUtrEntry(); if(section === 'vendors') renderVendors(); if(section === 'master-heads') renderMasterHeads(); if(section === 'users') renderUsers(); if(section === 'approvals') renderApprovals(); if(section === 'reports') initReports(); if(section === 'deleted') renderDeleted(); if(section === 'audit') renderAudit(); if(section === 'backup') renderBackupStats(); }
+document.querySelectorAll('.nav-item').forEach(n => n.addEventListener('click', () => navTo(n.dataset.nav)));
+
+// DASHBOARD
+let cashflowChart, headsChart;
+function renderDashboard(){ const bal = getCurrentBalance(); document.getElementById('sidebar-balance').textContent = fmtMoney(bal); document.getElementById('dash-balance').textContent = fmtMoney(bal); const now = new Date(), monthStart = new Date(now.getFullYear(), now.getMonth(), 1); const mTxns = State.transactions.filter(t => new Date(t.date) >= monthStart); const exp = mTxns.filter(t => t.type === 'Cash Out'), rec = mTxns.filter(t => t.type === 'Cash In'); document.getElementById('dash-expense').textContent = fmtMoney(exp.reduce((s,t)=>s+t.amount,0)); document.getElementById('dash-expense-count').textContent = `${exp.length} transaction${exp.length!==1?'s':''}`; document.getElementById('dash-received').textContent = fmtMoney(rec.reduce((s,t)=>s+t.amount,0)); document.getElementById('dash-received-count').textContent = `${rec.length} receipt${rec.length!==1?'s':''}`; document.getElementById('dash-vendors').textContent = State.vendors.length; document.getElementById('dash-transactions').textContent = State.transactions.length; const labels = [], cin = [], cout = []; for(let i=29; i>=0; i--){ const d = new Date(); d.setDate(d.getDate() - i); const dStr = d.toISOString().split('T')[0]; labels.push(d.toLocaleDateString('en-IN', {day:'2-digit', month:'short'})); const dt = State.transactions.filter(t => t.date === dStr); cin.push(dt.filter(t => t.type === 'Cash In').reduce((s,t)=>s+t.amount,0)); cout.push(dt.filter(t => t.type === 'Cash Out').reduce((s,t)=>s+t.amount,0)); } if(cashflowChart) cashflowChart.destroy(); cashflowChart = new Chart(document.getElementById('chart-cashflow'), { type: 'bar', data: { labels, datasets: [{label:'Cash In', data:cin, backgroundColor:'#1f6e54', borderRadius:4, barPercentage:0.7}, {label:'Cash Out', data:cout, backgroundColor:'#a83b2c', borderRadius:4, barPercentage:0.7}] }, options: { responsive:true, maintainAspectRatio:false, plugins:{legend:{display:false}, tooltip:{callbacks:{label:(c)=>c.dataset.label+': '+fmtMoney(c.raw)}}}, scales:{ y:{ticks:{callback:(v)=>'₹'+v, font:{size:10, family:'JetBrains Mono'}}, grid:{color:'rgba(14,43,34,0.05)'}}, x:{ticks:{font:{size:9}, maxRotation:0, autoSkip:true, maxTicksLimit:10}, grid:{display:false}} } } }); const hTotals = {}; exp.forEach(e => { const h = getHeadName(e.masterHeadId); hTotals[h] = (hTotals[h] || 0) + e.amount; }); const hLabels = Object.keys(hTotals), hValues = Object.values(hTotals), colors = ['#0e2b22','#1a4d3e','#2d6852','#c9971a','#f0c453','#a83b2c','#356a85','#7c4a8d','#1f6e54','#8c6810']; if(headsChart) headsChart.destroy(); headsChart = new Chart(document.getElementById('chart-heads'), { type: 'doughnut', data: { labels: hLabels, datasets: [{data: hValues, backgroundColor: colors, borderWidth:2, borderColor:'#fff'}] }, options: { responsive:true, maintainAspectRatio:false, plugins:{legend:{display:false}, tooltip:{callbacks:{label:(c)=>c.label+': '+fmtMoney(c.raw)}}}, cutout:'62%' } }); const legend = document.getElementById('heads-legend'); if(hLabels.length === 0) legend.innerHTML = '<div class="text-xs text-center py-2" style="color:var(--muted)">No expense data this month</div>'; else { const total = hValues.reduce((a,b)=>a+b,0); legend.innerHTML = hLabels.map((l,i)=>`<div class="flex items-center justify-between"><span class="flex items-center gap-2"><span class="w-2.5 h-2.5 rounded-full" style="background:${colors[i%colors.length]}"></span> ${l}</span><span class="font-mono font-semibold">${((hValues[i]/total)*100).toFixed(1)}%</span></div>`).join(''); } const recent = [...State.transactions].sort((a,b) => (b.date+b.createdDate).localeCompare(a.date+a.createdDate)).slice(0,6); document.getElementById('dash-recent').innerHTML = recent.length ? recent.map(t => `<tr><td><div class="text-xs">${fmtDate(t.date)}</div></td><td><span class="font-mono text-xs font-semibold">${t.id}</span></td><td>${t.type === 'Cash In' ? '<span class="badge badge-green">IN</span>' : '<span class="badge badge-red">OUT</span>'}</td><td><div class="text-xs truncate" style="max-width:180px">${t.description || '—'}</div></td><td class="text-right font-mono font-semibold" style="color:${t.type === 'Cash In' ? 'var(--success)' : 'var(--danger)'}">${t.type === 'Cash In' ? '+' : '-'} ${fmtMoney(t.amount)}</td></tr>`).join('') : '<tr><td colspan="5" class="text-center py-4 text-xs" style="color:var(--muted)">No transactions yet</td></tr>'; const vTotals = {}; State.transactions.filter(t => t.type === 'Cash Out').forEach(t => { if(!t.vendorId) return; vTotals[t.vendorId] = (vTotals[t.vendorId] || 0) + t.amount; }); const topV = Object.entries(vTotals).sort((a,b)=>b[1]-a[1]).slice(0,5); const maxT = topV.length ? topV[0][1] : 1; document.getElementById('dash-top-vendors').innerHTML = topV.length ? topV.map(([vid, amt]) => { const v = State.vendors.find(x => x.id === vid); const pct = (amt/maxT)*100; return `<div><div class="flex justify-between text-xs mb-1"><span class="font-semibold truncate flex-1">${v ? v.name : 'Unknown'}</span><span class="font-mono font-semibold ml-2">${fmtMoney(amt)}</span></div><div class="h-1.5 rounded-full overflow-hidden" style="background:var(--surface2)"><div class="h-full rounded-full" style="width:${pct}%; background:linear-gradient(90deg, var(--accent), var(--accent2))"></div></div></div>`; }).join('') : '<div class="text-xs text-center py-4" style="color:var(--muted)">No vendor expenses yet</div>'; }
+
+// EXPENSES
+let itemCounter = 0;
+function initExpenseForm(){ document.getElementById('exp-date').value = todayStr(); document.getElementById('exp-id').value = previewExpenseId(); const headSel = document.getElementById('exp-head'); headSel.innerHTML = '<option value="">Select Head</option>' + State.masterHeads.filter(h => h.type === 'expense').map(h => `<option value="${h.id}">${h.name}</option>`).join(''); headSel.onchange = () => populateSubHeads(); populateSubHeads(); setupVendorSearch(); document.getElementById('items-tbody').innerHTML = ''; itemCounter = 0; addItemRow(); document.getElementById('exp-tds-applicable').checked = false; document.getElementById('tds-section').style.display = 'none'; calcExpenseTotal(); document.getElementById('info-balance').textContent = fmtMoney(getCurrentBalance()); document.getElementById('info-seq').textContent = String(currentMonthExpenseSeq() + 1).padStart(4, '0'); }
+function currentMonthExpenseSeq(){ return State.expenseSeq[new Date().toISOString().substr(0,7).replace('-','')] || 0; }
+function previewExpenseId(){ return `PC-${new Date().toISOString().substr(0,7).replace('-','')}-${String(currentMonthExpenseSeq() + 1).padStart(4,'0')}`; }
+function populateSubHeads(){ const hId = document.getElementById('exp-head').value; const sel = document.getElementById('exp-subhead'); if(!hId) return sel.innerHTML = '<option value="">Select Head first</option>'; sel.innerHTML = '<option value="">Select Sub-Head</option>' + State.subHeads.filter(s => s.masterHeadId === hId).map(s => `<option value="${s.id}">${s.name}</option>`).join(''); }
+function setupVendorSearch(){ const input = document.getElementById('vendor-search'); const dd = document.getElementById('vendor-dropdown'); input.value=''; document.getElementById('exp-vendor-id').value=''; input.onfocus = () => renderVendorDropdown(input.value); input.oninput = () => renderVendorDropdown(input.value); document.addEventListener('click', e => { if(!document.getElementById('vendor-search-wrap').contains(e.target)) dd.classList.remove('open'); }); }
+function renderVendorDropdown(q){ const dd = document.getElementById('vendor-dropdown'); q = (q||'').toLowerCase().trim(); const m = State.vendors.filter(v => !q || v.name.toLowerCase().includes(q) || (v.contact && v.contact.includes(q))).slice(0, 8); dd.innerHTML = m.map(v => `<div class="search-select-option" onclick="selectVendor('${v.id}','${v.name.replace(/'/g,"\\'")}')"><div class="font-semibold">${v.name}</div><div class="text-[11px]" style="color:var(--muted)">${v.contact || 'No contact'} · ${v.mode || 'Cash'}</div></div>`).join('') + `<div class="search-select-add" onclick="openVendorModal()"><i class="fa-solid fa-plus"></i> Add New Vendor</div>`; dd.classList.add('open'); }
+function selectVendor(id, name){ document.getElementById('exp-vendor-id').value = id; document.getElementById('vendor-search').value = name; document.getElementById('vendor-dropdown').classList.remove('open'); }
+function toggleBankFields(mode, sectionId) { const sec = document.getElementById(sectionId); if (!sec) return; sec.style.display = (mode === 'Cash') ? 'none' : 'block'; }
+function openVendorModal(){ openModal(`<div class="modal-header"><h3 class="font-display font-bold text-lg">Add New Vendor</h3><button onclick="closeModal()" class="text-xl" style="color:rgba(240,196,83,.7)"><i class="fa-solid fa-xmark"></i></button></div><form onsubmit="return saveVendorFromModal(event)" class="modal-body space-y-4"><div><label class="field-label">Vendor Name <span style="color:var(--danger)">*</span></label><input type="text" class="input" id="mv-name" required autofocus></div><div><label class="field-label">Contact Number</label><input type="text" class="input" id="mv-contact"></div><div><label class="field-label">Address</label><textarea class="textarea" id="mv-address" rows="2"></textarea></div><div><label class="field-label">Mode</label><select class="select" id="mv-mode" onchange="toggleBankFields(this.value, 'mv-bank-section')"><option value="Cash">Cash</option><option value="Online">Online</option><option value="Both">Both</option></select></div><div id="mv-bank-section" style="display:none;"><label class="field-label">Bank Account Details</label><div class="p-3 rounded-lg space-y-2" style="background:var(--surface2); border:1px solid var(--border)"><input type="text" class="input" id="mv-bene" placeholder="Beneficiary Name"><input type="text" class="input" id="mv-acc" placeholder="Account Number"><input type="text" class="input" id="mv-ifsc" placeholder="IFSC Code"></div></div><div class="modal-footer !p-0 !bg-transparent !border-0 pt-2"><button type="button" class="btn btn-ghost" onclick="closeModal()">Cancel</button><button type="submit" class="btn btn-primary"><i class="fa-solid fa-save"></i> Save Vendor</button></div></form>`); setTimeout(() => document.getElementById('mv-name').focus(), 100); }
+function saveVendorFromModal(e){ e.preventDefault(); const n = document.getElementById('mv-name').value.trim(), c = document.getElementById('mv-contact').value.trim(), a = document.getElementById('mv-address').value.trim(), m = document.getElementById('mv-mode').value; if(!n) return toast('Vendor name is required', 'error'), false; if(State.vendors.some(v => v.name.toLowerCase() === n.toLowerCase())) return toast('Vendor already exists.', 'warning'), false; const bN = m !== 'Cash' ? document.getElementById('mv-bene').value.trim() : ''; const bA = m !== 'Cash' ? document.getElementById('mv-acc').value.trim() : ''; const bI = m !== 'Cash' ? document.getElementById('mv-ifsc').value.trim() : ''; const nv = { id: 'V'+String(State.vendors.length+1).padStart(3,'0'), name:n, contact:c, address:a, mode:m, bankBene:bN, bankAcc:bA, bankIfsc:bI, createdDate: new Date().toISOString() }; State.vendors.push(nv); saveData(); toast('Vendor added', 'success'); closeModal(); if(document.getElementById('sec-expense').classList.contains('active')) selectVendor(nv.id, nv.name); renderVendors(); return false; }
+function quickAddVendor(e){ e.preventDefault(); const n = document.getElementById('qv-name').value.trim(), c = document.getElementById('qv-contact').value.trim(), a = document.getElementById('qv-address').value.trim(), m = document.getElementById('qv-mode').value; if(!n) return toast('Vendor name is required', 'error'), false; if(State.vendors.some(v => v.name.toLowerCase() === n.toLowerCase())) return toast('Vendor already exists', 'warning'), false; const bN = m !== 'Cash' ? document.getElementById('qv-bene').value.trim() : ''; const bA = m !== 'Cash' ? document.getElementById('qv-acc').value.trim() : ''; const bI = m !== 'Cash' ? document.getElementById('qv-ifsc').value.trim() : ''; State.vendors.push({ id: 'V'+String(State.vendors.length+1).padStart(3,'0'), name:n, contact:c, address:a, mode:m, bankBene:bN, bankAcc:bA, bankIfsc:bI, createdDate: new Date().toISOString() }); saveData(); toast('Vendor added', 'success'); document.getElementById('quick-vendor-form').reset(); toggleBankFields('Cash', 'qv-bank-section'); renderVendors(); return false; }
+function addItemRow(){ itemCounter++; const tr = document.createElement('tr'); tr.dataset.sr = itemCounter; tr.innerHTML = `<td class="text-center font-mono text-xs font-semibold" style="color:var(--muted)">${itemCounter}</td><td><input type="text" placeholder="Item name" oninput="calcItemTotal(this)"></td><td><input type="number" min="0" step="0.01" placeholder="0" oninput="calcItemTotal(this)" class="item-qty"></td><td><input type="number" min="0" step="0.01" placeholder="0.00" oninput="calcItemTotal(this)" class="item-rate"></td><td><input type="text" class="item-total font-mono" value="₹0.00" readonly style="background:#f3eee0"></td><td><button type="button" class="btn btn-ghost btn-sm btn-icon" onclick="this.closest('tr').remove(); renumberItems(); calcExpenseTotal();"><i class="fa-solid fa-trash" style="color:var(--danger)"></i></button></td>`; document.getElementById('items-tbody').appendChild(tr); calcExpenseTotal(); }
+function renumberItems(){ document.querySelectorAll('#items-tbody tr').forEach((r, i) => { r.dataset.sr = i + 1; r.querySelector('td:first-child').textContent = i + 1; }); itemCounter = document.querySelectorAll('#items-tbody tr').length; }
+function calcItemTotal(i){ const tr = i.closest('tr'); const q = parseFloat(tr.querySelector('.item-qty').value) || 0, r = parseFloat(tr.querySelector('.item-rate').value) || 0; tr.querySelector('.item-total').value = fmtMoney(q * r); calcExpenseTotal(); }
+function calcExpenseTotal(){ let s = 0; document.querySelectorAll('#items-tbody tr').forEach(tr => s += (parseFloat(tr.querySelector('.item-qty').value) || 0) * (parseFloat(tr.querySelector('.item-rate').value) || 0)); document.getElementById('exp-subtotal').textContent = fmtMoney(s); let tds = 0; if(document.getElementById('exp-tds-applicable').checked) tds = (s * (parseFloat(document.getElementById('exp-tds-rate').value) || 0)) / 100; document.getElementById('exp-tds-amount').textContent = fmtMoney(tds); document.getElementById('exp-final-total').textContent = fmtMoney(s - tds); }
+function toggleTds(){ const c = document.getElementById('exp-tds-applicable').checked; document.getElementById('tds-section').style.display = c ? 'block' : 'none'; if(c && !document.getElementById('exp-tds-rate').value) document.getElementById('exp-tds-rate').value = 10; calcExpenseTotal(); }
+function resetExpenseForm(){ document.getElementById('expense-form').reset(); initExpenseForm(); }
+function submitExpense(e){ e.preventDefault(); const vId = document.getElementById('exp-vendor-id').value; if(!vId) return toast('Please select a vendor', 'error'), false; const amt = (() => { let s = 0; document.querySelectorAll('#items-tbody tr').forEach(tr => s += (parseFloat(tr.querySelector('.item-qty').value) || 0) * (parseFloat(tr.querySelector('.item-rate').value) || 0)); let tds = 0; if(document.getElementById('exp-tds-applicable').checked) tds = (s * (parseFloat(document.getElementById('exp-tds-rate').value) || 0)) / 100; return s - tds; })(); if(amt <= 0) return toast('Please add at least one item with valid amount', 'error'), false; const fileInput = document.getElementById('exp-attachment'); if(fileInput.files && fileInput.files[0]){ const f = fileInput.files[0]; if(f.size > 2*1024*1024) return toast('Attachment too large (max 2MB)', 'warning'), false; const r = new FileReader(); r.onload = e => finalizeExpense(amt, e.target.result); r.readAsDataURL(f); return false; } finalizeExpense(amt, null); return false; }
+function finalizeExpense(amt, att){ const date = document.getElementById('exp-date').value, ym = date.substr(0,7).replace('-',''); State.expenseSeq[ym] = (State.expenseSeq[ym] || 0) + 1; const id = `PC-${ym}-${String(State.expenseSeq[ym]).padStart(4,'0')}`; const items = []; document.querySelectorAll('#items-tbody tr').forEach((tr, i) => { const n = tr.querySelector('td:nth-child(2) input').value, q = parseFloat(tr.querySelector('.item-qty').value) || 0, r = parseFloat(tr.querySelector('.item-rate').value) || 0; if(n || q > 0) items.push({sr:i+1, name:n||'Item '+(i+1), qty:q, rate:r, total:q*r}); }); const sub = items.reduce((s,it)=>s+it.total, 0), tdsApp = document.getElementById('exp-tds-applicable').checked, tdsR = tdsApp ? (parseFloat(document.getElementById('exp-tds-rate').value) || 0) : 0, tdsA = tdsApp ? (sub * tdsR / 100) : 0; 
+  // Background balance calculation (negative balance allowed)
+  const o = getCurrentBalance(); const c = o - amt;
+  State.transactions.push({ id, type:'Cash Out', date, vendorId: document.getElementById('exp-vendor-id').value, receivedFrom: null, masterHeadId: document.getElementById('exp-head').value, subHeadId: document.getElementById('exp-subhead').value, description: document.getElementById('exp-desc').value, amount:amt, openingBalance:o, closingBalance:c, billNumber: document.getElementById('exp-bill').value, paymentMode: document.getElementById('exp-mode').value, items, tdsApplicable:tdsApp, tdsRate:tdsR, tdsAmount:tdsA, subtotal:sub, remarks: document.getElementById('exp-remarks').value, attachment:att, createdBy: CurrentUser.name, createdDate: new Date().toISOString(), modifiedBy: null, modifiedDate: null, utr: null }); saveData(); toast('Expense saved: ' + id, 'success'); resetExpenseForm(); renderDashboard(); }
+
+// UTR & CLOSING ENTRY MENU
+function renderUtrEntry() {
+  const tbody = document.getElementById('utr-tbody');
+  if(!tbody) return;
+  const searchInput = document.getElementById('utr-search');
+  const search = searchInput ? searchInput.value.toLowerCase().trim() : '';
+  let list = State.transactions.filter(t => t.type === 'Cash Out' && !t.utr);
+  if(search) {
+    list = list.filter(t => t.id.toLowerCase().includes(search) || (t.description||'').toLowerCase().includes(search) || getVendorName(t.vendorId).toLowerCase().includes(search) || (t.billNumber||'').toLowerCase().includes(search));
+  }
+  list.sort((a,b) => (a.date+a.createdDate).localeCompare(b.date+b.createdDate));
+  if(list.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="8" class="empty-state"><i class="fa-solid fa-circle-check"></i><div>All expenses are closed! No pending UTR entries.</div></td></tr>';
+    return;
+  }
+  tbody.innerHTML = list.map(t => `<tr><td><div class="text-xs">${fmtDate(t.date)}</div></td><td><span class="font-mono text-xs font-semibold">${t.id}</span></td><td><div class="text-xs">${getVendorName(t.vendorId)}</div></td><td><div class="text-xs truncate" style="max-width:200px" title="${t.description || ''}">${t.description || '—'}</div></td><td class="text-xs">${t.billNumber || '—'}</td><td class="text-right font-mono text-xs font-bold">${fmtMoney(t.amount)}</td><td><span class="badge badge-gray">Pending</span></td><td><button class="btn btn-accent btn-sm" onclick="openUtrModal('${t.id}')"><i class="fa-solid fa-check-double"></i> Enter UTR</button></td></tr>`).join('');
+}
+function openUtrModal(id) {
+  const t = State.transactions.find(x => x.id === id);
+  if (!t) return;
+  if (t.utr) return toast('UTR already entered. Entry is locked.', 'warning');
+  openModal(`<div class="modal-header"><h3 class="font-display font-bold text-lg">Enter UTR / Payment Reference</h3><button onclick="closeModal()" class="text-xl" style="color:rgba(240,196,83,.7)"><i class="fa-solid fa-xmark"></i></button></div><form onsubmit="return saveUtr(event, '${id}')" class="modal-body space-y-4"><div class="p-3 rounded-lg" style="background:var(--surface2)"><div class="text-xs"><strong>Txn ID:</strong> ${t.id}</div><div class="text-xs"><strong>Amount:</strong> ${fmtMoney(t.amount)}</div></div><div><label class="field-label">UTR / Transaction Reference No. <span style="color:var(--danger)">*</span></label><input type="text" class="input" id="utr-input" placeholder="e.g. UTR123456789" required autofocus><div class="text-xs mt-2" style="color:var(--danger)"><i class="fa-solid fa-triangle-exclamation"></i> Warning: Once UTR is entered, this entry cannot be deleted or modified.</div></div><div class="modal-footer !p-0 !bg-transparent !border-0 pt-2"><button type="button" class="btn btn-ghost" onclick="closeModal()">Cancel</button><button type="submit" class="btn btn-primary"><i class="fa-solid fa-lock"></i> Save & Lock Entry</button></div></form>`);
+  setTimeout(() => document.getElementById('utr-input').focus(), 100);
+}
+function saveUtr(e, id) {
+  e.preventDefault();
+  const utr = document.getElementById('utr-input').value.trim();
+  if(!utr) return toast('UTR number is required', 'error'), false;
+  const t = State.transactions.find(x => x.id === id);
+  if (!t) return;
+  t.utr = utr;
+  saveData();
+  toast('UTR saved. Entry locked successfully.', 'success');
+  closeModal(); renderTransactions(); renderUtrEntry(); renderDashboard();
+  return false;
+}
+
+// TRANSACTIONS
+let trxPage = 1; const trxPerPage = 10;
+function renderTransactions(){
+  const vSel = document.getElementById('trx-vendor'), cV = vSel.value; vSel.innerHTML = '<option value="">All Vendors</option>' + State.vendors.map(v => `<option value="${v.id}">${v.name}</option>`).join(''); vSel.value = cV; const hSel = document.getElementById('trx-head'), cH = hSel.value; hSel.innerHTML = '<option value="">All Heads</option>' + State.masterHeads.map(h => `<option value="${h.id}">${h.name}</option>`).join(''); hSel.value = cH; 
+  let list = [...State.transactions]; const s = document.getElementById('trx-search').value.toLowerCase().trim(), f = document.getElementById('trx-from').value, t = document.getElementById('trx-to').value, v = document.getElementById('trx-vendor').value, ty = document.getElementById('trx-type').value, h = document.getElementById('trx-head').value, so = document.getElementById('trx-sort').value; 
+  if(s) list = list.filter(x => x.id.toLowerCase().includes(s) || (x.description||'').toLowerCase().includes(s) || getVendorName(x.vendorId).toLowerCase().includes(s) || (x.billNumber||'').toLowerCase().includes(s) || (x.receivedFrom||'').toLowerCase().includes(s)); 
+  if(f) list = list.filter(x => x.date >= f); if(t) list = list.filter(x => x.date <= t); if(v) list = list.filter(x => x.vendorId === v); if(ty) list = list.filter(x => x.type === ty); if(h) list = list.filter(x => x.masterHeadId === h); 
+  list.sort((a,b) => so === 'date-desc' ? (b.date+b.createdDate).localeCompare(a.date+a.createdDate) : so === 'date-asc' ? (a.date+a.createdDate).localeCompare(b.date+b.createdDate) : so === 'amount-desc' ? b.amount-a.amount : a.amount-b.amount); 
+  const tot = list.length, totP = Math.max(1, Math.ceil(tot/trxPerPage)); if(trxPage > totP) trxPage = totP; const pList = list.slice((trxPage-1)*trxPerPage, trxPage*trxPerPage); 
+  document.getElementById('trx-tbody').innerHTML = pList.length ? pList.map(t => `<tr><td><div class="text-xs">${fmtDate(t.date)}</div></td><td><span class="font-mono text-xs font-semibold">${t.id}</span></td><td>${t.type === 'Cash In' ? '<span class="badge badge-green">IN</span>' : '<span class="badge badge-red">OUT</span>'}</td><td><div class="text-xs">${getVendorName(t.vendorId)}</div></td><td><div class="text-xs truncate" style="max-width:200px">${t.description || '—'}</div></td><td class="font-mono text-xs">${fmtMoney(t.openingBalance)}</td><td class="font-mono text-xs font-bold" style="color:${t.type === 'Cash In' ? 'var(--success)' : 'var(--danger)'}">${t.type === 'Cash In' ? '+' : '-'} ${fmtMoney(t.amount)}</td><td class="font-mono text-xs font-semibold">${fmtMoney(t.closingBalance)}</td><td><span class="badge ${t.paymentMode === 'Cash' ? 'badge-amber' : 'badge-blue'}">${t.paymentMode}</span></td><td>${t.utr ? `<span class="badge badge-green"><i class="fa-solid fa-lock"></i> PAID</span><div class="text-[10px] font-mono">${t.utr}</div>` : '<span class="badge badge-gray">Pending</span>'}</td><td><div class="text-xs">${t.createdBy || '—'}</div></td><td><div class="flex gap-1"><button class="btn btn-ghost btn-sm btn-icon" onclick="viewTransaction('${t.id}')" title="View"><i class="fa-solid fa-eye"></i></button>${!t.utr ? `<button class="btn btn-ghost btn-sm btn-icon" onclick="deleteTransaction('${t.id}')" title="Delete"><i class="fa-solid fa-trash" style="color:var(--danger)"></i></button><button class="btn btn-accent btn-sm" onclick="openUtrModal('${t.id}')" title="Enter UTR"><i class="fa-solid fa-check-double"></i></button>` : '<button class="btn btn-ghost btn-sm btn-icon" disabled title="Locked"><i class="fa-solid fa-lock"></i></button>'}</div></td></tr>`).join('') : '<tr><td colspan="12" class="empty-state"><i class="fa-solid fa-folder-open"></i><div>No transactions found</div></td></tr>'; 
+  document.getElementById('trx-info').textContent = `Showing ${pList.length} of ${tot} transactions`; let ph = `<button class="btn btn-ghost btn-sm btn-icon" onclick="goTrxPage(${trxPage-1})" ${trxPage===1?'disabled':''}><i class="fa-solid fa-chevron-left"></i></button>`; for(let i=1; i<=totP; i++){ if(i === 1 || i === totP || Math.abs(i-trxPage) <= 1) ph += `<button class="btn btn-sm ${i===trxPage?'btn-primary':'btn-ghost'}" onclick="goTrxPage(${i})">${i}</button>`; else if(Math.abs(i-trxPage) === 2) ph += `<span class="px-2" style="color:var(--muted)">…</span>`; } ph += `<button class="btn btn-ghost btn-sm btn-icon" onclick="goTrxPage(${trxPage+1})" ${trxPage===totP?'disabled':''}><i class="fa-solid fa-chevron-right"></i></button>`; document.getElementById('trx-pagination').innerHTML = ph; 
+}
+function goTrxPage(p){ trxPage = p; renderTransactions(); }
+function clearTrxFilters(){ ['trx-search','trx-from','trx-to','trx-vendor','trx-type','trx-head'].forEach(id => document.getElementById(id).value = ''); document.getElementById('trx-sort').value = 'date-desc'; trxPage = 1; renderTransactions(); }
+
+function viewTransaction(id){ const t = State.transactions.find(x => x.id === id); if(!t) return; openModal(`<div class="modal-header"><h3 class="font-display font-bold text-lg">Transaction Details</h3><button onclick="closeModal()" class="text-xl" style="color:rgba(240,196,83,.7)"><i class="fa-solid fa-xmark"></i></button></div><div class="modal-body"><div class="grid grid-cols-2 gap-3 mb-3"><div><div class="field-label">Transaction ID</div><div class="font-mono font-bold">${t.id}</div></div><div><div class="field-label">Date</div><div>${fmtDate(t.date)}</div></div><div><div class="field-label">Type</div><div>${t.type === 'Cash In' ? '<span class="badge badge-green">Cash In</span>' : '<span class="badge badge-red">Cash Out</span>'}</div></div><div><div class="field-label">Payment Mode</div><div>${t.paymentMode}</div></div><div><div class="field-label">Vendor / Source</div><div>${t.vendorId ? getVendorName(t.vendorId) : (t.receivedFrom || '—')}</div></div><div><div class="field-label">Bill Number</div><div>${t.billNumber || '—'}</div></div>${t.masterHeadId ? `<div><div class="field-label">Expense Head</div><div>${getHeadName(t.masterHeadId)}</div></div>` : ''}${t.subHeadId ? `<div><div class="field-label">Sub-Head</div><div>${getSubHeadName(t.subHeadId)}</div></div>` : ''}${t.utr ? `<div class="col-span-2"><div class="field-label">UTR / Reference</div><div class="font-mono font-bold" style="color:var(--success)">${t.utr} (Locked)</div></div>` : ''}</div><div class="mb-3"><div class="field-label">Description</div><div>${t.description || '—'}</div></div><div class="grid grid-cols-3 gap-2 mb-3 p-3 rounded-lg" style="background:var(--surface2)"><div><div class="field-label">Opening</div><div class="font-mono font-semibold">${fmtMoney(t.openingBalance)}</div></div><div><div class="field-label">Amount</div><div class="font-mono font-bold" style="color:${t.type === 'Cash In' ? 'var(--success)' : 'var(--danger)'}">${t.type === 'Cash In' ? '+' : '-'} ${fmtMoney(t.amount)}</div></div><div><div class="field-label">Closing</div><div class="font-mono font-bold">${fmtMoney(t.closingBalance)}</div></div></div></div><div class="modal-footer"><button class="btn btn-ghost" onclick="closeModal()">Close</button></div>`); }
+
+// DELETE / APPROVALS WORKFLOW
+function deleteTransaction(id){ 
+  const t = State.transactions.find(x => x.id === id); if(!t) return; 
+  if(t.utr) return toast('Cannot delete. Entry is locked because UTR was entered.', 'error');
+  if(isAdmin()){ openModal(`<div class="modal-header" style="background:var(--danger)"><h3 class="font-display font-bold text-lg">Confirm Delete</h3><button onclick="closeModal()" class="text-xl text-white"><i class="fa-solid fa-xmark"></i></button></div><div class="modal-body"><div class="flex items-start gap-3 p-3 rounded-lg mb-4" style="background:#fdf5f3; border:1px solid #f5ddd7"><i class="fa-solid fa-triangle-exclamation mt-1" style="color:var(--danger)"></i><div class="flex-1"><p class="font-semibold text-sm mb-1">Are you sure you want to permanently delete this transaction?</p><p class="text-xs" style="color:var(--muted)">As an Administrator, this will be recorded in the Deleted Transactions report.</p></div></div><div class="p-3 rounded-lg mb-4" style="background:var(--surface2)"><div class="flex items-center justify-between mb-2"><span class="font-mono font-bold text-sm">${t.id}</span>${t.type === 'Cash In' ? '<span class="badge badge-green">Cash In</span>' : '<span class="badge badge-red">Cash Out</span>'}</div><div class="text-xs mb-1" style="color:var(--muted)">${fmtDate(t.date)}</div><div class="text-sm mb-2">${t.description || '—'}</div><div class="flex justify-between text-sm pt-2 border-t" style="border-color:var(--border)"><span style="color:var(--muted)">Amount</span><span class="font-mono font-bold">${fmtMoney(t.amount)}</span></div></div><div class="mb-3"><label class="field-label">Reason for Deletion <span style="color:var(--danger)">*</span></label><textarea class="textarea" id="delete-reason" rows="3" placeholder="Provide reason..." required></textarea></div></div><div class="modal-footer"><button class="btn btn-ghost" onclick="closeModal()">Cancel</button><button class="btn btn-danger" onclick="confirmDeleteTransaction('${id}', true)"><i class="fa-solid fa-trash"></i> Delete &amp; Record</button></div>`); } else { openModal(`<div class="modal-header"><h3 class="font-display font-bold text-lg">Request Deletion</h3><button onclick="closeModal()" class="text-xl" style="color:rgba(240,196,83,.7)"><i class="fa-solid fa-xmark"></i></button></div><div class="modal-body"><div class="flex items-start gap-3 p-3 rounded-lg mb-4" style="background:#fef3d0; border:1px solid #fcefc8"><i class="fa-solid fa-clock mt-1" style="color:var(--warning)"></i><div class="flex-1"><p class="font-semibold text-sm mb-1">Deletion Approval Required</p><p class="text-xs" style="color:var(--muted)">Your request will be sent to the Administrator for approval. The transaction will remain active until approved.</p></div></div><div class="p-3 rounded-lg mb-4" style="background:var(--surface2)"><div class="flex items-center justify-between mb-2"><span class="font-mono font-bold text-sm">${t.id}</span>${t.type === 'Cash In' ? '<span class="badge badge-green">Cash In</span>' : '<span class="badge badge-red">Cash Out</span>'}</div><div class="text-xs mb-1" style="color:var(--muted)">${fmtDate(t.date)}</div><div class="text-sm mb-2">${t.description || '—'}</div><div class="flex justify-between text-sm pt-2 border-t" style="border-color:var(--border)"><span style="color:var(--muted)">Amount</span><span class="font-mono font-bold">${fmtMoney(t.amount)}</span></div></div><div class="mb-3"><label class="field-label">Reason for Deletion Request <span style="color:var(--danger)">*</span></label><textarea class="textarea" id="delete-reason" rows="3" placeholder="Explain why this should be deleted..." required></textarea></div></div><div class="modal-footer"><button class="btn btn-ghost" onclick="closeModal()">Cancel</button><button class="btn btn-primary" onclick="confirmDeleteTransaction('${id}', false)"><i class="fa-solid fa-paper-plane"></i> Send Request</button></div>`); } 
+}
+function confirmDeleteTransaction(id, isHardDelete){ const reason = document.getElementById('delete-reason').value.trim(); if(!reason) return toast('Please provide a reason', 'error'); const idx = State.transactions.findIndex(t => t.id === id); if(idx === -1) return; const t = State.transactions[idx]; if(t.utr) return toast('Cannot delete. Entry is locked.', 'error'); if(isHardDelete){ State.transactions.splice(idx, 1); State.deletedTransactions.push({ ...t, deletedBy: CurrentUser.name, deletedByUsername: CurrentUser.username, deletedByMobile: CurrentUser.mobile, deletedDate: new Date().toISOString(), deletionReason: reason }); recalculateBalances(); toast('Transaction permanently deleted', 'success'); } else { State.pendingDeletions.push({ ...t, requestedBy: CurrentUser.name, requestedByUsername: CurrentUser.username, requestedByMobile: CurrentUser.mobile, requestedDate: new Date().toISOString(), requestReason: reason }); toast('Deletion request sent to Administrator', 'success'); } saveData(); closeModal(); renderTransactions(); renderDashboard(); }
+function recalculateBalances(){ State.transactions.sort((a,b) => (a.date+a.createdDate).localeCompare(b.date+b.createdDate)); let r = State.settings.openingBalance || 0; if(State.transactions.length > 0 && State.transactions[0].type === 'Cash In') r = 0; State.transactions.forEach(t => { t.openingBalance = r; t.closingBalance = t.type === 'Cash In' ? r + t.amount : r - t.amount; r = t.closingBalance; }); }
+
+// APPROVALS (Admin)
+function renderApprovals(){ if(!isAdmin()) return; const tbody = document.getElementById('approvals-tbody'); const pend = State.pendingDeletions || []; if(pend.length === 0) return tbody.innerHTML = '<tr><td colspan="9" class="empty-state"><i class="fa-solid fa-check-circle"></i><div>No pending requests</div></td></tr>'; tbody.innerHTML = pend.map(t => `<tr><td><span class="font-mono text-xs font-semibold">${t.id}</span></td><td class="text-xs">${fmtDate(t.date)}</td><td>${t.type === 'Cash In' ? '<span class="badge badge-green">IN</span>' : '<span class="badge badge-red">OUT</span>'}</td><td class="text-xs truncate" style="max-width:200px">${t.description || '—'}</td><td class="text-right font-mono text-xs font-bold">${fmtMoney(t.amount)}</td><td class="text-xs">${t.requestedBy}<div class="text-[10px]" style="color:var(--muted)">@${t.requestedByUsername}</div></td><td class="text-xs">${fmtDateTime(t.requestedDate)}</td><td class="text-xs" style="max-width:200px"><div class="truncate" title="${t.requestReason}">${t.requestReason}</div></td><td><div class="flex gap-1"><button class="btn btn-danger btn-sm" onclick="approveDeletion('${t.id}')"><i class="fa-solid fa-check"></i> Approve</button><button class="btn btn-ghost btn-sm" onclick="rejectDeletion('${t.id}')"><i class="fa-solid fa-times"></i> Reject</button></div></td></tr>`).join(''); }
+function approveDeletion(id){ const idx = State.pendingDeletions.findIndex(t => t.id === id); if(idx === -1) return; const t = State.pendingDeletions[idx]; if(t.utr) { toast('Cannot delete. Entry is locked.', 'error'); State.pendingDeletions.splice(idx, 1); saveData(); renderApprovals(); return; } State.pendingDeletions.splice(idx, 1); const tIdx = State.transactions.findIndex(x => x.id === id); if(tIdx !== -1) State.transactions.splice(tIdx, 1); State.deletedTransactions.push({ ...t, deletedBy: t.requestedBy, deletedByUsername: t.requestedByUsername, deletedByMobile: t.requestedByMobile, deletedDate: new Date().toISOString(), deletionReason: t.requestReason + ' (Approved by Admin)' }); recalculateBalances(); saveData(); renderApprovals(); renderDashboard(); toast('Deletion approved & executed', 'success'); }
+function rejectDeletion(id){ State.pendingDeletions = State.pendingDeletions.filter(t => t.id !== id); saveData(); renderApprovals(); toast('Deletion request rejected', 'info'); }
+
+// VENDORS
+function renderVendors(){ const s = document.getElementById('vendor-search-master').value.toLowerCase().trim(); let l = [...State.vendors]; if(s) l = l.filter(v => v.name.toLowerCase().includes(s) || (v.contact||'').toLowerCase().includes(s) || (v.address||'').toLowerCase().includes(s)); l.sort((a,b) => a.name.localeCompare(b.name)); const tb = document.getElementById('vendors-tbody'); if(l.length === 0) return tb.innerHTML = '<tr><td colspan="7" class="empty-state"><i class="fa-solid fa-users-slash"></i><div>No vendors found</div></td></tr>'; tb.innerHTML = l.map(v => `<tr><td><span class="font-mono text-xs font-semibold">${v.id}</span></td><td class="font-semibold">${v.name}<div class="text-[10px]" style="color:var(--muted)">${v.address || ''}</div></td><td class="text-xs">${v.contact || '—'}</td><td><span class="badge ${v.mode === 'Cash' ? 'badge-amber' : v.mode === 'Online' ? 'badge-blue' : 'badge-gray'}">${v.mode}</span></td><td class="text-xs">${v.mode === 'Cash' ? '<span style="color:var(--muted)">N/A</span>' : `<div class="font-mono text-[11px]">${v.bankBene || '—'}<br>${v.bankAcc || '—'}<br>${v.bankIfsc || '—'}</div>`}</td><td class="text-xs">${fmtDate(v.createdDate)}</td><td><button class="btn btn-ghost btn-sm btn-icon" onclick="deleteVendor('${v.id}')"><i class="fa-solid fa-trash" style="color:var(--danger)"></i></button></td></tr>`).join(''); }
+function deleteVendor(id){ if(State.transactions.some(t => t.vendorId === id)) return toast('Cannot delete vendor — used in transactions', 'error'); openModal(`<div class="modal-header" style="background:var(--danger)"><h3 class="font-display font-bold text-lg">Delete Vendor</h3><button onclick="closeModal()" class="text-xl text-white"><i class="fa-solid fa-xmark"></i></button></div><div class="modal-body"><p>Are you sure you want to delete this vendor?</p></div><div class="modal-footer"><button class="btn btn-ghost" onclick="closeModal()">Cancel</button><button class="btn btn-danger" onclick="confirmDeleteVendor('${id}')">Delete</button></div>`); }
+function confirmDeleteVendor(id){ State.vendors = State.vendors.filter(v => v.id !== id); saveData(); toast('Vendor deleted', 'success'); closeModal(); renderVendors(); renderDashboard(); }
+
+// MASTER HEADS (Admin)
+function renderMasterHeads(){ if(!isAdmin()) return; document.getElementById('sh-parent').innerHTML = '<option value="">Select Parent Head</option>' + State.masterHeads.map(h => `<option value="${h.id}">${h.name}</option>`).join(''); const tb = document.getElementById('heads-tbody'); if(State.masterHeads.length === 0) tb.innerHTML = '<tr><td colspan="5" class="empty-state"><i class="fa-solid fa-tags"></i><div>No master heads created</div></td></tr>'; else tb.innerHTML = State.masterHeads.map(h => `<tr><td><span class="font-mono text-xs font-semibold">${h.id}</span></td><td class="font-semibold">${h.name}</td><td><span class="badge ${h.type === 'expense' ? 'badge-red' : 'badge-green'}">${h.type}</span></td><td class="text-xs">${State.subHeads.filter(s => s.masterHeadId === h.id).length} sub-head(s)</td><td><button class="btn btn-ghost btn-sm btn-icon" onclick="deleteMasterHead('${h.id}')"><i class="fa-solid fa-trash" style="color:var(--danger)"></i></button></td></tr>`).join(''); const list = document.getElementById('subheads-list'); if(State.subHeads.length === 0) list.innerHTML = '<div class="empty-state"><i class="fa-solid fa-list-ul"></i><div>No sub-heads created</div></div>'; else list.innerHTML = State.masterHeads.map(h => { const subs = State.subHeads.filter(s => s.masterHeadId === h.id); if(subs.length === 0) return ''; return `<div class="rounded-lg p-3" style="background:var(--surface2)"><div class="font-semibold text-sm mb-2">${h.name}</div><div class="space-y-1">${subs.map(s => `<div class="flex items-center justify-between text-xs"><span class="font-mono">${s.id}</span><span class="flex-1 ml-2">${s.name}</span><button class="btn btn-ghost btn-sm btn-icon" onclick="deleteSubHead('${s.id}')"><i class="fa-solid fa-times" style="color:var(--danger)"></i></button></div>`).join('')}</div></div>`; }).join(''); }
+function addMasterHead(e){ e.preventDefault(); const n = document.getElementById('mh-name').value.trim(), ty = document.getElementById('mh-type').value; if(!n) return toast('Head name is required', 'error'), false; if(State.masterHeads.some(h => h.name.toLowerCase() === n.toLowerCase())) return toast('Head already exists', 'warning'), false; State.masterHeads.push({id:'MH'+String(State.masterHeads.length+1).padStart(3,'0'), name:n, type:ty}); saveData(); toast('Master head added', 'success'); document.getElementById('head-form').reset(); renderMasterHeads(); return false; }
+function addSubHead(e){ e.preventDefault(); const p = document.getElementById('sh-parent').value, n = document.getElementById('sh-name').value.trim(); if(!p) return toast('Select parent head', 'error'), false; if(!n) return toast('Sub-head name required', 'error'), false; if(State.subHeads.some(s => s.masterHeadId === p && s.name.toLowerCase() === n.toLowerCase())) return toast('Sub-head already exists', 'warning'), false; State.subHeads.push({id:'SH'+String(State.subHeads.length+1).padStart(3,'0'), masterHeadId:p, name:n}); saveData(); toast('Sub-head added', 'success'); document.getElementById('subhead-form').reset(); renderMasterHeads(); return false; }
+function deleteMasterHead(id){ if(State.transactions.some(t => t.masterHeadId === id)) return toast('Cannot delete — head used in transactions', 'error'); State.masterHeads = State.masterHeads.filter(h => h.id !== id); State.subHeads = State.subHeads.filter(s => s.masterHeadId !== id); saveData(); toast('Head deleted', 'success'); renderMasterHeads(); }
+function deleteSubHead(id){ if(State.transactions.some(t => t.subHeadId === id)) return toast('Cannot delete — sub-head used in transactions', 'error'); State.subHeads = State.subHeads.filter(s => s.id !== id); saveData(); toast('Sub-head deleted', 'success'); renderMasterHeads(); }
+
+// REPORTS
+let currentReport = 'daily';
+function initReports(){ setReportPreset('thisMonth'); generateReport(); }
+function switchReport(type){ currentReport = type; document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active')); document.querySelector(`.tab-btn[data-report="${type}"]`).classList.add('active'); generateReport(); }
+function setReportPreset(p){ const n = new Date(); if(p === 'thisMonth'){ document.getElementById('rpt-from').value = new Date(n.getFullYear(), n.getMonth(), 1).toISOString().split('T')[0]; document.getElementById('rpt-to').value = n.toISOString().split('T')[0]; } else if(p === 'lastMonth'){ const l = new Date(n.getFullYear(), n.getMonth()-1, 1); document.getElementById('rpt-from').value = l.toISOString().split('T')[0]; document.getElementById('rpt-to').value = new Date(n.getFullYear(), n.getMonth(), 0).toISOString().split('T')[0]; } }
+
+function generateReport(){ 
+  const f = document.getElementById('rpt-from').value, t = document.getElementById('rpt-to').value; 
+  let tx = [...State.transactions]; 
+  if(f) tx = tx.filter(x => x.date >= f); if(t) tx = tx.filter(x => x.date <= t); 
+  
+  const tbl = document.getElementById('report-table'), sm = document.getElementById('report-summary'); 
+  const cin = tx.filter(x=>x.type==='Cash In').reduce((s,x)=>s+x.amount,0), cout = tx.filter(x=>x.type==='Cash Out').reduce((s,x)=>s+x.amount,0); 
+  
+  sm.innerHTML = `<div class="stat-card"><div class="text-[11px] uppercase font-semibold" style="color:var(--muted)">Total Txns</div><div class="balance-display text-xl mt-1">${tx.length}</div></div><div class="stat-card green"><div class="text-[11px] uppercase font-semibold" style="color:var(--muted)">Total In</div><div class="balance-display text-xl mt-1">${fmtMoney(cin)}</div></div><div class="stat-card red"><div class="text-[11px] uppercase font-semibold" style="color:var(--muted)">Total Out</div><div class="balance-display text-xl mt-1">${fmtMoney(cout)}</div></div><div class="stat-card blue"><div class="text-[11px] uppercase font-semibold" style="color:var(--muted)">Net Flow</div><div class="balance-display text-xl mt-1">${fmtMoney(cin-cout)}</div></div>`; 
+  
+  // Detailed Table for all reports
+  const headers = ['Date', 'Txn ID', 'Type', 'Mode', 'Vendor', 'Head', 'Sub-Head', 'Description', 'Bill No', 'TDS', 'Amount', 'UTR'];
+  let rows = tx.map(x => `
+    <tr>
+      <td class="text-xs">${fmtDate(x.date)}</td>
+      <td><span class="font-mono text-xs font-semibold">${x.id}</span></td>
+      <td>${x.type === 'Cash In' ? '<span class="badge badge-green">IN</span>' : '<span class="badge badge-red">OUT</span>'}</td>
+      <td class="text-xs">${x.paymentMode || '-'}</td>
+      <td class="text-xs">${x.vendorId ? getVendorName(x.vendorId) : (x.receivedFrom || '-')}</td>
+      <td class="text-xs">${x.masterHeadId ? getHeadName(x.masterHeadId) : '-'}</td>
+      <td class="text-xs">${x.subHeadId ? getSubHeadName(x.subHeadId) : '-'}</td>
+      <td class="text-xs truncate" style="max-width:200px">${x.description || '-'}</td>
+      <td class="text-xs">${x.billNumber || '-'}</td>
+      <td class="text-xs font-mono">${x.tdsApplicable ? fmtMoney(x.tdsAmount) + ' (' + x.tdsRate + '%)' : '-'}</td>
+      <td class="text-right font-mono text-xs font-bold" style="color:${x.type === 'Cash In' ? 'var(--success)' : 'var(--danger)'}">${x.type === 'Cash In' ? '+' : '-'} ${fmtMoney(x.amount)}</td>
+      <td class="text-xs font-mono">${x.utr ? `<span style="color:var(--success)">${x.utr}</span>` : '-'}</td>
+    </tr>
+  `).join('');
+
+  tbl.innerHTML = `<thead><tr>${headers.map(h => `<th>${h}</th>`).join('')}</tr></thead><tbody>${rows || '<tr><td colspan="12" class="empty-state"><div>No data</div></td></tr>'}</tbody>`; 
+}
+
+function exportReport(format){ 
+  const tbl = document.getElementById('report-table'); const data = []; const headers = []; 
+  tbl.querySelectorAll('thead th').forEach(th => headers.push(th.textContent.trim())); data.push(headers); 
+  tbl.querySelectorAll('tbody tr').forEach(tr => { const row = []; tr.querySelectorAll('td').forEach(td => row.push(td.textContent.trim())); data.push(row); }); 
+  if(format === 'excel'){ const ws = XLSX.utils.aoa_to_sheet(data); const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, 'Report'); XLSX.writeFile(wb, `Report_${todayStr()}.xlsx`); toast('Excel exported', 'success'); } 
+  else if(format === 'pdf'){ const { jsPDF } = window.jspdf; const doc = new jsPDF({orientation: 'landscape'}); doc.setFontSize(16); doc.text('Expenses Report', 14, 18); doc.autoTable({ head: [data[0]], body: data.slice(1), startY: 25, headStyles: {fillColor: [14, 43, 34], textColor: [240, 196, 83]}, styles: { fontSize: 7, cellPadding: 1.5 } }); doc.save(`Report_${todayStr()}.pdf`); toast('PDF exported', 'success'); } 
+}
+function printReport(){ window.print(); }
+function exportTransactions(format){ 
+  const headers = ['Date', 'Txn ID', 'Type', 'Mode', 'Vendor', 'Head', 'Sub-Head', 'Description', 'Bill No', 'TDS', 'Amount', 'UTR']; const data = [headers]; 
+  State.transactions.forEach(t => data.push([fmtDate(t.date), t.id, t.type, t.paymentMode, t.vendorId ? getVendorName(t.vendorId) : (t.receivedFrom || ''), t.masterHeadId ? getHeadName(t.masterHeadId) : '', t.subHeadId ? getSubHeadName(t.subHeadId) : '', t.description || '', t.billNumber || '', t.tdsApplicable ? fmtMoney(t.tdsAmount) + ' (' + t.tdsRate + '%)' : '-', t.amount, t.utr || ''])); 
+  if(format === 'excel'){ const ws = XLSX.utils.aoa_to_sheet(data); const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, 'Transactions'); XLSX.writeFile(wb, `Transactions_${todayStr()}.xlsx`); } 
+  else if(format === 'pdf'){ const { jsPDF } = window.jspdf; const doc = new jsPDF({orientation: 'landscape'}); doc.setFontSize(16); doc.text('Transaction Register', 14, 18); doc.autoTable({ head: [headers], body: data.slice(1), startY: 25, headStyles: {fillColor: [14, 43, 34], textColor: [240, 196, 83]}, styles: { fontSize: 7, cellPadding: 1.5 } }); doc.save(`Transactions_${todayStr()}.pdf`); } 
+  toast('Exported', 'success'); 
+}
+
+// DELETED REPORT
+let delPage = 1; const delPerPage = 10;
+function renderDeleted(){ const del = State.deletedTransactions || []; document.getElementById('deleted-summary').innerHTML = `<div class="stat-card red"><div class="text-[11px] uppercase font-semibold" style="color:var(--muted)">Total Deleted</div><div class="balance-display text-2xl mt-1">${del.length}</div></div><div class="stat-card purple"><div class="text-[11px] uppercase font-semibold" style="color:var(--muted)">Total Amount</div><div class="balance-display text-2xl mt-1">${fmtMoney(del.reduce((s,t)=>s+t.amount,0))}</div></div>`; const uSel = document.getElementById('del-user'), cU = uSel.value; uSel.innerHTML = '<option value="">All Users</option>' + [...new Set(del.map(t => t.deletedBy))].map(u => `<option value="${u}">${u}</option>`).join(''); uSel.value = cU; let list = [...del]; const s = document.getElementById('del-search').value.toLowerCase().trim(), f = document.getElementById('del-from').value, t = document.getElementById('del-to').value, u = document.getElementById('del-user').value, ty = document.getElementById('del-type').value; if(s) list = list.filter(x => x.id.toLowerCase().includes(s) || (x.description||'').toLowerCase().includes(s)); if(f) list = list.filter(x => x.deletedDate.substr(0,10) >= f); if(t) list = list.filter(x => x.deletedDate.substr(0,10) <= t); if(u) list = list.filter(x => x.deletedBy === u); if(ty) list = list.filter(x => x.type === ty); list.sort((a,b) => b.deletedDate.localeCompare(a.deletedDate)); const tot = list.length, totP = Math.max(1, Math.ceil(tot/delPerPage)); if(delPage > totP) delPage = totP; const pList = list.slice((delPage-1)*delPerPage, delPage*delPerPage); document.getElementById('deleted-tbody').innerHTML = pList.length ? pList.map(t => `<tr><td><span class="font-mono text-xs font-semibold" style="color:var(--danger)">${t.id}</span></td><td class="text-xs">${fmtDate(t.date)}</td><td>${t.type === 'Cash In' ? '<span class="badge badge-green">IN</span>' : '<span class="badge badge-red">OUT</span>'}</td><td class="text-xs">${t.vendorId ? getVendorName(t.vendorId) : (t.receivedFrom || '—')}</td><td class="text-xs">${t.description || '—'}</td><td class="text-right font-mono text-xs font-bold">${fmtMoney(t.amount)}</td><td><div class="flex items-center gap-2"><div class="user-avatar" style="width:24px; height:24px; font-size:9px">${getUserInitials(t.deletedBy)}</div><div class="text-xs font-semibold">${t.deletedBy}</div></div></td><td class="text-xs font-mono">${fmtDateTime(t.deletedDate)}</td><td class="text-xs" style="max-width:200px"><div class="truncate" title="${t.deletionReason}">${t.deletionReason}</div></td><td><button class="btn btn-ghost btn-sm btn-icon" onclick="viewDeletedTransaction('${t.id}')"><i class="fa-solid fa-eye"></i></button></td></tr>`).join('') : '<tr><td colspan="10" class="empty-state"><div>No deleted transactions found</div></td></tr>'; document.getElementById('deleted-info').textContent = `Showing ${pList.length} of ${tot} deleted transactions`; let ph = `<button class="btn btn-ghost btn-sm btn-icon" onclick="goDelPage(${delPage-1})" ${delPage===1?'disabled':''}><i class="fa-solid fa-chevron-left"></i></button>`; for(let i=1; i<=totP; i++){ if(i === 1 || i === totP || Math.abs(i-delPage) <= 1) ph += `<button class="btn btn-sm ${i===delPage?'btn-primary':'btn-ghost'}" onclick="goDelPage(${i})">${i}</button>`; else if(Math.abs(i-delPage) === 2) ph += `<span class="px-2" style="color:var(--muted)">…</span>`; } ph += `<button class="btn btn-ghost btn-sm btn-icon" onclick="goDelPage(${delPage+1})" ${delPage===totP?'disabled':''}><i class="fa-solid fa-chevron-right"></i></button>`; document.getElementById('deleted-pagination').innerHTML = ph; }
+function goDelPage(p){ delPage = p; renderDeleted(); }
+function viewDeletedTransaction(id){ const t = (State.deletedTransactions || []).find(x => x.id === id); if(!t) return; openModal(`<div class="modal-header" style="background:var(--danger)"><h3 class="font-display font-bold text-lg">Deleted Transaction</h3><button onclick="closeModal()" class="text-xl text-white"><i class="fa-solid fa-xmark"></i></button></div><div class="modal-body"><div class="p-4 rounded-lg mb-4" style="background:#fdf5f3"><div class="flex items-center gap-3 mb-3"><div class="user-avatar" style="background:var(--danger); color:#fff">${getUserInitials(t.deletedBy)}</div><div class="flex-1"><div class="font-bold text-sm">${t.deletedBy}</div><div class="text-xs" style="color:var(--muted)">@${t.deletedByUsername || '—'}</div></div><div class="text-right"><div class="text-[10px] uppercase font-semibold" style="color:var(--danger)">Deleted On</div><div class="text-xs font-mono">${fmtDateTime(t.deletedDate)}</div></div></div><div class="pt-3 border-t" style="border-color:#f5ddd7"><div class="text-[10px] uppercase font-semibold mb-1" style="color:var(--danger)">Reason</div><div class="text-sm">${t.deletionReason}</div></div></div><div class="grid grid-cols-2 gap-3"><div><div class="field-label">ID</div><div class="font-mono font-bold">${t.id}</div></div><div><div class="field-label">Amount</div><div class="font-mono font-bold">${fmtMoney(t.amount)}</div></div></div></div><div class="modal-footer"><button class="btn btn-ghost" onclick="closeModal()">Close</button></div>`); }
+function exportDeleted(format){ const del = State.deletedTransactions || []; if(del.length === 0) return toast('No deleted transactions to export', 'warning'); const headers = ['ID', 'Date', 'Amount', 'Deleted By', 'Deleted Date', 'Reason']; const data = [headers]; del.forEach(t => data.push([t.id, fmtDate(t.date), t.amount, t.deletedBy, fmtDateTime(t.deletedDate), t.deletionReason])); if(format === 'excel'){ const ws = XLSX.utils.aoa_to_sheet(data); const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, 'Deleted'); XLSX.writeFile(wb, `Deleted_${todayStr()}.xlsx`); } else if(format === 'pdf'){ const { jsPDF } = window.jspdf; const doc = new jsPDF(); doc.setFontSize(16); doc.text('Deleted Transactions', 14, 18); doc.autoTable({ head: [headers], body: data.slice(1), startY: 25, headStyles: {fillColor: [168, 59, 44], textColor: [255, 255, 255]} }); doc.save(`Deleted_${todayStr()}.pdf`); } toast('Exported', 'success'); }
+function printDeleted(){ window.print(); }
+
+// AUDIT
+function renderAudit(){ let list = [...State.transactions]; const s = document.getElementById('audit-search').value.toLowerCase().trim(), f = document.getElementById('audit-from').value, t = document.getElementById('audit-to').value; if(s) list = list.filter(x => x.id.toLowerCase().includes(s) || (x.createdBy||'').toLowerCase().includes(s)); if(f) list = list.filter(x => x.date >= f); if(t) list = list.filter(x => x.date <= t); list.sort((a,b) => b.createdDate.localeCompare(a.createdDate)); document.getElementById('audit-tbody').innerHTML = list.length ? list.map(t => `<tr><td><span class="font-mono text-xs font-semibold">${t.id}</span></td><td>${t.type}</td><td class="font-mono font-semibold">${fmtMoney(t.amount)}</td><td class="text-xs">${t.createdBy || '—'}</td><td class="text-xs">${fmtDateTime(t.createdDate)}</td><td class="text-xs">${t.modifiedBy || '—'}</td><td class="text-xs">${fmtDateTime(t.modifiedDate)}</td><td>${t.modifiedBy ? '<span class="badge badge-amber">Modified</span>' : '<span class="badge badge-green">Original</span>'}</td></tr>`).join('') : '<tr><td colspan="8" class="empty-state"><div>No records</div></td></tr>'; }
+
+// LOCAL WINDOWS BACKUP
+function renderBackupUI(status, fileName = '') { const area = document.getElementById('backup-connect-area'); const statusEl = document.getElementById('local-sync-status'); if (status === 'connected') { area.innerHTML = `<div class="flex gap-2"><button class="btn btn-ghost w-full justify-center" onclick="exportBackup()"><i class="fa-solid fa-download"></i> Download Copy</button><button class="btn btn-danger w-full justify-center" onclick="disconnectLocalBackup()"><i class="fa-solid fa-unlink"></i> Disconnect</button></div>`; statusEl.innerHTML = `<span style="color:var(--success)"><i class="fa-solid fa-circle-check"></i> Auto-syncing to: ${fileName}</span>`; } else if (status === 'pending') { area.innerHTML = `<button class="btn btn-primary w-full justify-center" onclick="resumeLocalBackup()"><i class="fa-solid fa-plug-circle-check"></i> Resume Local Backup Sync</button>`; statusEl.innerHTML = `<span style="color:var(--warning)"><i class="fa-solid fa-circle-exclamation"></i> Permission required to resume auto-sync.</span>`; } else { area.innerHTML = `<button class="btn btn-primary w-full justify-center" onclick="connectLocalBackup()"><i class="fa-solid fa-plug"></i> Connect Local Backup File (Windows)</button>`; statusEl.innerHTML = `<span style="color:var(--muted)">Not connected to a local file.</span>`; } }
+async function connectLocalBackup() { if(!window.showSaveFilePicker) return toast('Your browser does not support direct file writing. Use Download instead.', 'warning'); try { fileHandle = await window.showSaveFilePicker({ suggestedName: 'expenses_data_backup.json', types: [{ description: 'JSON', accept: { 'application/json': ['.json'] } }] }); await fileDB.init(); await fileDB.set('localBackupHandle', fileHandle); renderBackupUI('connected', fileHandle.name); toast('Local backup connected. Auto-saving enabled.', 'success'); saveData(); } catch(e) { console.error(e); } }
+async function resumeLocalBackup() { if(!fileHandle) return; try { if (await fileHandle.requestPermission({ mode: 'readwrite' }) === 'granted') { renderBackupUI('connected', fileHandle.name); toast('Sync resumed successfully.', 'success'); saveData(); } else { toast('Permission denied.', 'error'); } } catch(e) { toast('Failed to resume sync.', 'error'); } }
+async function disconnectLocalBackup() { fileHandle = null; await fileDB.delete('localBackupHandle'); renderBackupUI('disconnected'); toast('Local backup disconnected.', 'info'); }
+async function checkLocalBackupOnStart() { await fileDB.init(); const savedHandle = await fileDB.get('localBackupHandle'); if (savedHandle) { fileHandle = savedHandle; if (await savedHandle.queryPermission({ mode: 'readwrite' }) === 'granted') renderBackupUI('connected', savedHandle.name); else renderBackupUI('pending', savedHandle.name); } else renderBackupUI('disconnected'); }
+
+function exportBackup(){ const d = JSON.stringify(State, null, 2); const b = new Blob([d], {type:'application/json'}); const u = URL.createObjectURL(b); const a = document.createElement('a'); a.href = u; a.download = `Expenses_Backup_${todayStr()}.json`; a.click(); URL.revokeObjectURL(u); toast('Backup downloaded', 'success'); }
+function importBackup(e){ const f = e.target.files[0]; if(!f) return; const r = new FileReader(); r.onload = function(e){ try { const d = JSON.parse(e.target.result); if(!d.users) throw new Error('Invalid'); State = d; if(!State.pendingDeletions) State.pendingDeletions = []; saveData(); toast('Backup restored', 'success'); renderDashboard(); } catch(err){ toast('Invalid file', 'error'); } }; r.readAsText(f); }
+
+// CLEAR ALL DATA
+function confirmClearData(){ if (!isAdmin()) return toast('Access Denied: Administrator permission required', 'error'); openModal(`<div class="modal-header" style="background:var(--danger)"><h3 class="font-display font-bold text-lg">Clear All Data</h3><button onclick="closeModal()" class="text-xl text-white"><i class="fa-solid fa-xmark"></i></button></div><div class="modal-body"><p class="text-sm mb-4" style="color:var(--danger)"><i class="fa-solid fa-triangle-exclamation"></i> <strong>Warning:</strong> This will permanently delete ALL data. Please download a backup first.</p><div><label class="field-label">Enter Secret Key <span style="color:var(--danger)">*</span></label><input type="password" class="input" id="clear-data-secret" placeholder="Admin Secret Key"></div></div><div class="modal-footer"><button class="btn btn-ghost" onclick="closeModal()">Cancel</button><button class="btn btn-danger" onclick="verifyAndClearData()"><i class="fa-solid fa-trash"></i> Clear Everything</button></div>`); }
+function verifyAndClearData() { const key = document.getElementById('clear-data-secret').value; if (key !== ADMIN_SECRET_KEY) return toast('Invalid Secret Key. Access Denied.', 'error'); clearAllData(); }
+function clearAllData(){ localStorage.removeItem(STORE_KEY); State = JSON.parse(JSON.stringify(defaultData)); saveData(); toast('All data cleared', 'success'); closeModal(); setTimeout(() => location.reload(), 500); }
+function renderBackupStats(){ const s = new Blob([JSON.stringify(State)]).size; document.getElementById('storage-stats').innerHTML = `<div class="flex justify-between p-3 rounded-lg" style="background:var(--surface2)"><span class="text-sm">Transactions</span><span class="font-mono font-bold">${State.transactions.length}</span></div><div class="flex justify-between p-3 rounded-lg" style="background:var(--surface2)"><span class="text-sm">Pending Deletions</span><span class="font-mono font-bold" style="color:var(--warning)">${State.pendingDeletions.length}</span></div><div class="flex justify-between p-3 rounded-lg" style="background:var(--surface2)"><span class="text-sm">Deleted Records</span><span class="font-mono font-bold" style="color:var(--danger)">${State.deletedTransactions.length}</span></div><div class="flex justify-between p-3 rounded-lg" style="background:var(--surface2)"><span class="text-sm">Storage Size</span><span class="font-mono font-bold">${(s/1024).toFixed(2)} KB</span></div>`; }
+
+// INIT
+function updateClock(){ const n = new Date(); document.getElementById('today-date').textContent = n.toLocaleDateString('en-IN', {weekday:'short', day:'2-digit', month:'short', year:'numeric'}); document.getElementById('today-time').textContent = n.toLocaleTimeString('en-IN', {hour:'2-digit', minute:'2-digit', second:'2-digit'}); }
+async function init(){ 
+  await loadData(); // Fetch latest data from Supabase first
+  seedDataIfEmpty(); 
+  await checkLocalBackupOnStart(); 
+  
+  const sId = sessionStorage.getItem(SESSION_KEY); 
+  if(sId){ 
+    const u = State.users.find(x => x.id === sId); 
+    if(u){ 
+      CurrentUser = u; 
+      u.lastLogin = new Date().toISOString(); 
+      saveData(); 
+      showApp(); 
+      setInterval(updateClock, 1000); 
+      
+      // --- REALTIME LISTENER ---
+      if (supabaseClient) {
+        supabaseClient.channel('app_data_changes')
+          .on('postgres_changes', { event: '*', schema: 'public', table: 'app_data' }, payload => {
+            // When data changes in Supabase, update the local state
+            if (payload.new && payload.new.data) {
+              State = payload.new.data;
+              localStorage.setItem(STORE_KEY, JSON.stringify(State));
+              
+              // Re-render the current page to show the new data instantly
+              const activeSection = document.querySelector('.section.active')?.id.replace('sec-', '');
+              if (activeSection) navTo(activeSection);
+              renderDashboard(); // Update sidebar balance
+            }
+          })
+          .subscribe();
+      }
+      // ------------------------
+      
+      return; 
+    } 
+  } 
+  
+  document.getElementById('login-screen').classList.remove('hidden');
+  document.getElementById('app').style.display = 'none'; 
+}
+window.addEventListener('DOMContentLoaded', init);
+
+window.togglePassword = togglePassword; window.handleSignIn = handleSignIn; window.logout = logout; window.performLogout = performLogout; window.openProfileModal = openProfileModal;
+window.openUserModal = openUserModal; window.saveUserFromModal = saveUserFromModal; window.openEditUserModal = openEditUserModal; window.saveEditUser = saveEditUser; window.deleteUser = deleteUser; window.confirmDeleteUser = confirmDeleteUser; window.renderUsers = renderUsers;
+window.navTo = navTo; window.openVendorModal = openVendorModal; window.saveVendorFromModal = saveVendorFromModal; window.toggleBankFields = toggleBankFields; window.quickAddVendor = quickAddVendor; window.selectVendor = selectVendor;
+window.addItemRow = addItemRow; window.calcItemTotal = calcItemTotal; window.toggleTds = toggleTds; window.calcTds = calcExpenseTotal; window.submitExpense = submitExpense; window.resetExpenseForm = resetExpenseForm;
+window.renderTransactions = renderTransactions; window.goTrxPage = goTrxPage; window.clearTrxFilters = clearTrxFilters; window.viewTransaction = viewTransaction; window.deleteTransaction = deleteTransaction; window.confirmDeleteTransaction = confirmDeleteTransaction; window.openUtrModal = openUtrModal; window.saveUtr = saveUtr; window.renderUtrEntry = renderUtrEntry;
+window.renderVendors = renderVendors; window.deleteVendor = deleteVendor; window.confirmDeleteVendor = confirmDeleteVendor; window.addMasterHead = addMasterHead; window.addSubHead = addSubHead; window.deleteMasterHead = deleteMasterHead; window.deleteSubHead = deleteSubHead;
+window.renderApprovals = renderApprovals; window.approveDeletion = approveDeletion; window.rejectDeletion = rejectDeletion;
+window.switchReport = switchReport; window.setReportPreset = setReportPreset; window.generateReport = generateReport; window.exportReport = exportReport; window.printReport = printReport; window.exportTransactions = exportTransactions;
+window.renderDeleted = renderDeleted; window.goDelPage = goDelPage; window.viewDeletedTransaction = viewDeletedTransaction; window.exportDeleted = exportDeleted; window.printDeleted = printDeleted; window.renderAudit = renderAudit;
+window.connectLocalBackup = connectLocalBackup; window.resumeLocalBackup = resumeLocalBackup; window.disconnectLocalBackup = disconnectLocalBackup; window.exportBackup = exportBackup; window.importBackup = importBackup; window.confirmClearData = confirmClearData; window.verifyAndClearData = verifyAndClearData; window.clearAllData = clearAllData; window.closeModal = closeModal; window.toast = toast;
+</script>
+</body>
+</html>
